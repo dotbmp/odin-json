@@ -1,0 +1,41 @@
+{
+    "num": 5,
+    "ppl": [
+        {
+            "first_name": "Pinkie",
+            "last_name":  "Gillespie",
+            "nickname":   null,
+            "age":        29,
+            "country":    4,
+        },
+        {
+            "first_name": "Abe",
+            "last_name":  "Cianco",
+            "nickname":   null,
+            "age":        71,
+            "country":    2,
+        },
+        {
+            "first_name": "Jason",
+            "last_name":  "Sturgell",
+            "nickname":   "The Sturge",
+            "age":        34,
+            "country":    1,
+        },
+        {
+            "first_name": "Timika",
+            "last_name":  "Twilley",
+            "nickname":   null,
+            "age":        26,
+            "country":    3,
+        },
+        {
+            "first_name": "Ricky",
+            "last_name":  "Palm",
+            "nickname":   "Sticky Ricky",
+            "age":        14,
+            "country":    5,
+        },
+    ],
+    "pointless": 157.985,
+}
