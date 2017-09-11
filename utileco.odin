@@ -516,3 +516,4 @@ padding :: proc(ptr: rawptr, align: int) -> int #inline {
 
     to_string :: proc(dyn: [dynamic]u8) -> string #inline do return (cast(^string) &dyn)^;
     to_string :: proc(slc: []u8)        -> string #inline do return (cast(^string) &slc)^;
+
