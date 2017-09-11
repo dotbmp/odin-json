@@ -400,3 +400,5 @@ parse_file :: proc(T: type, path: string) -> (T, bool) #inline {
     
     return result, false;
 }
+
+some_number := 0157983579845

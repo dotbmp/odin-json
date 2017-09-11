@@ -94,3 +94,4 @@ read :: proc(lexer: ^Lexer, reader: Read_Proc) -> (Lexeme, int) {
         return Lexeme{start, cast(string) lexer.source[start.bytes..lexer.bytes]}, code;
     }
 }
+
