@@ -6,22 +6,25 @@
  *  @Creation: 31-01-2018 00:26:30 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 31-01-2018 00:31:28 UTC-5
+ *  @Last Time: 31-01-2018 05:30:55 UTC-5
  *  
  *  @Description:
  *  
  */
 
-////////////////////////////////
-// TEST CASES
-////////////////////////////////
-
 import "core:fmt.odin"
 import "core:os.odin"
 
-import "shared:tempo.odin"
+import "tempo.odin"
 
 using import _ "json.odin"
+
+
+
+////////////////////////////////
+//
+// TEST CASES
+////////////////////////////////
 
 /*
 test1 :: proc() {
@@ -204,6 +207,25 @@ test7 :: proc() {
     }
 }
 
+profile_lexer :: proc() {
+    FILE :: "jeopardy.json";
+
+    if bytes, ok := os.read_entire_file(FILE); ok {
+        timer := tempo.make_timer();
+        
+        tokens := lex(string(bytes));
+
+        time := tempo.query(&timer);
+
+        fmt.printf("%d tokens in %fms, %f ms/token, %f tokens/ms\n",
+            len(tokens),
+            tempo.ms(time),
+            tempo.ms(time)/f64(len(tokens)),
+            f64(len(tokens))/tempo.ms(time),
+        );
+    }
+}
+
 main :: proc() {
-    test4();
+    profile_lexer();
 }

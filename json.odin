@@ -6,7 +6,7 @@
  *  @Creation: 28-11-2017 00:10:03 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 31-01-2018 00:30:54 UTC-5
+ *  @Last Time: 31-01-2018 05:29:16 UTC-5
  *  
  *  @Description:
  *  
@@ -270,6 +270,7 @@ lex :: proc(text : string, filename := "") -> []Token {
         cursor = Cursor{lines=1, chars=1},
         path   = filename,
         source = text,
+        errors = 0,
     };
 
     tokens : [dynamic]Token;
@@ -407,10 +408,10 @@ lex :: proc(text : string, filename := "") -> []Token {
             next_char(&lexer);
         }
 
-        append(&tokens, Token{bookmark, kind, source[bookmark.index..lexer.index]});
+        #no_bounds_check append(&tokens, Token{bookmark, kind, source[bookmark.index..lexer.index]});
     }
 
-    if errors > 0 {
+    if errors > 0 { // @note(bpunsky): triggers when opt > 0
         fmt.printf_err("%d errors", errors);
         free(tokens);
         panic(); // @fix(bpunsky)
@@ -566,11 +567,14 @@ parse_string :: inline proc(text : string, spec := Spec.JSON, path := "") -> (Va
     return parse(&parser);
 }
 
+import pat "shared:path.odin"
+
 parse_file :: inline proc(path: string, spec := Spec.JSON) -> (Value, bool) {
     if bytes, ok := os.read_entire_file(path); ok {
         return parse_string(string(bytes), spec, path);
     }
 
+    fmt.println(pat.full(path));
     return Value{}, false;
 }
 
@@ -972,10 +976,7 @@ unmarshal_file_to_any :: inline proc(data : any, path : string, spec := Spec.JSO
 
 unmarshal_file_to_type :: inline proc(T : type, path : string, spec := Spec.JSON) -> (T, bool) {
     if value, ok := parse_file(path, spec); ok {
-        fmt.println("yo");
-        res: T;
-        tmp := unmarshal(res, value, spec);
-        return res, tmp;
+        return unmarshal(T, value, spec);
     }
 
     return T{}, false;
