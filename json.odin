@@ -1,404 +1,982 @@
-      import "core:fmt.odin";
-      import "core:mem.odin";
-using import "core:strconv.odin";
+/*
+ *  @Name:     json
+ *  
+ *  @Author:   Brendan Punsky
+ *  @Email:    bpunsky@gmail.com
+ *  @Creation: 28-11-2017 00:10:03 UTC-5
+ *
+ *  @Last By:   Brendan Punsky
+ *  @Last Time: 31-01-2018 00:30:54 UTC-5
+ *  
+ *  @Description:
+ *  
+ */
 
-using import "leksa.odin";
-using import "utileco.odin";
+import "core:fmt.odin"
+import "core:mem.odin"
+import "core:os.odin"
+import "core:raw.odin"
+import "core:strconv.odin"
+import "core:utf8.odin"
+import "core:utf16.odin"
 
-// @ref: https://bitbucket.org/WAHa_06x36/smalljsonparser/src/971a25326cb1?at=default
-// @ref: http://json.org/
 
-Token :: enum int {
-    Null = 1,
-       
+
+////////////////////////////
+//
+// GENERAL
+////////////////////////////
+
+error :: proc(format : string, args : ...any) {
+    message := fmt.aprintf(format, ...args);
+    defer free(message);
+
+    fmt.printf_err("Error: %s\n", message);
+}
+
+escape_string :: proc(str: string) -> string {
+    buf := fmt.String_Buffer{};
+
+    for i := 0; i < len(str); {
+        char, skip := utf8.decode_rune(cast([]u8) str[i..]);
+        i += skip;
+
+        switch char {
+        case: 
+            if utf8.valid_rune(char) {
+                fmt.write_rune(&buf, char);
+            } else {
+                error("Invalid rune in string: '%c' (%H)", char, char);
+            }
+
+        case '"':  fmt.sbprint(&buf, "\\\"");
+        case '\'': fmt.sbprint(&buf, "\\'");
+        case '\\': fmt.sbprint(&buf, "\\\\");
+        case '\a': fmt.sbprint(&buf, "\\a");
+        case '\b': fmt.sbprint(&buf, "\\b");
+        case '\f': fmt.sbprint(&buf, "\\f");
+        case '\n': fmt.sbprint(&buf, "\\n");
+        case '\r': fmt.sbprint(&buf, "\\r");
+        case '\t': fmt.sbprint(&buf, "\\t");
+        case '\v': fmt.sbprint(&buf, "\\v");
+        }
+    }
+
+    return fmt.to_string(buf);
+}
+
+unescape_string :: proc(str: string) -> string {
+    buf := fmt.String_Buffer{};
+
+    for i := 0; i < len(str); {
+        char, skip := utf8.decode_rune(cast([]u8) str[i..]);
+        i += skip;
+
+        switch char {
+        case: fmt.write_rune(&buf, char);
+
+        case '"': // @note: do nothing.
+
+        case '\\':
+            char, skip = utf8.decode_rune(cast([]u8) str[i..]);
+            i += skip;
+
+            switch char {
+            case '\\': fmt.write_rune(&buf, '\\');
+            case '\'': fmt.write_rune(&buf, '\'');
+            case '"':  fmt.write_rune(&buf, '"');
+
+            case 'a': fmt.write_rune(&buf, '\a');
+            case 'b': fmt.write_rune(&buf, '\b');
+            case 'f': fmt.write_rune(&buf, '\f');
+            case 'n': fmt.write_rune(&buf, '\n');
+            case 'r': fmt.write_rune(&buf, '\r');
+            case 't': fmt.write_rune(&buf, '\t');
+            case 'v': fmt.write_rune(&buf, '\v');
+
+            case 'u':
+                lo, hi: rune;
+                hex := [...]u8{'0', 'x', '0', '0', '0', '0'};
+
+                c0, s0 := utf8.decode_rune(cast([]u8) str[i..]); hex[2] = cast(u8) c0; i += s0;
+                c1, s1 := utf8.decode_rune(cast([]u8) str[i..]); hex[3] = cast(u8) c1; i += s1;
+                c2, s2 := utf8.decode_rune(cast([]u8) str[i..]); hex[4] = cast(u8) c2; i += s2;
+                c3, s3 := utf8.decode_rune(cast([]u8) str[i..]); hex[5] = cast(u8) c3; i += s3;
+
+                lo = cast(rune) strconv.parse_int(cast(string) hex[..]);
+
+                if utf16.is_surrogate(lo) {
+                    c0, s0 := utf8.decode_rune(cast([]u8) str[i..]); i += s0;
+                    c1, s1 := utf8.decode_rune(cast([]u8) str[i..]); i += s1;
+
+                    if c0 == '\\' && c1 == 'u' {
+                        c0, s0 = utf8.decode_rune(cast([]u8) str[i..]); hex[2] = cast(u8) c0; i += s0;
+                        c1, s1 = utf8.decode_rune(cast([]u8) str[i..]); hex[3] = cast(u8) c1; i += s1;
+                        c2, s2 = utf8.decode_rune(cast([]u8) str[i..]); hex[4] = cast(u8) c2; i += s2;
+                        c3, s3 = utf8.decode_rune(cast([]u8) str[i..]); hex[5] = cast(u8) c3; i += s3;                      
+
+                        hi = cast(rune) strconv.parse_u64(string(hex[..]));
+                        lo = utf16.decode_surrogate_pair(lo, hi);
+
+                        if lo == utf16.REPLACEMENT_CHAR {
+                            error("Invalid surrogate pair");
+                        }
+                    } else {
+                        error("Expected a surrogate pair");
+                    }
+                }
+
+                fmt.write_rune(&buf, lo);
+
+            case: error("Invalid escape character '%c'", char);
+            }
+        }
+    }
+
+    return fmt.to_string(buf);
+}
+
+
+
+////////////////////////////
+//
+// TYPES
+////////////////////////////
+
+Spec :: enum {JSON, JSON5};
+
+Null   ::             rawptr;
+Int    :: #type_alias i64;
+Float  :: #type_alias f64;
+Bool   :: #type_alias bool;
+String :: #type_alias string;
+Array  ::             [dynamic]Value;
+Object ::             map[string]Value;
+
+Value :: struct {
+    using token : Token,
+
+    value : union {
+        Null,
+        Int,
+        Float,
+        Bool,
+        String,
+        Array,
+        Object,
+    },
+}
+
+Token :: struct {
+    using cursor : Cursor,
+
+    kind : Kind,
+    text : string,
+}
+
+Kind :: enum {
+    Invalid,
+
+    Null,
     True,
     False,
 
-    String,
+    Symbol,
+    
     Float,
     Integer,
+    String,
 
-    Start_Array,
-    End_Array,
-
-    Start_Object,
-    End_Object,
-
-    Pair,
-
+    Colon,
     Comma,
+    
+    Open_Brace,
+    Close_Brace,
+
+    Open_Bracket,
+    Close_Bracket,
+
+    End,
 }
 
-Error :: enum int {
-    Unexpected_EOF        = -1,
-    Unexpected_Line_Break = -2,
-    Double_Radix          = -3,
+Cursor :: struct {
+    index : int,
+    lines : int,
+    chars : int,
 }
 
-read_null :: proc(lexer: ^Lexer) -> int {
-    if              peek(lexer) == 'n' do
-        if          next(lexer) == 'u' do
-            if      next(lexer) == 'l' do
-                if  next(lexer) == 'l' {
-                    next(lexer);
-                    return cast(int) Token.Null;
-                }
-    return 0;
+destroy :: proc(value : Value) {
+    switch v in value.value {
+    case Object:
+        for _, val in v do destroy(val);
+        free(cast(map[string]Value) v);
+
+    case Array:
+        for val in v do destroy(val);
+        free(cast([dynamic]Value) v);
+
+    case String: free(cast(string) v);
+    }
 }
 
-read_bool :: proc(lexer: ^Lexer) -> int {
-    if              peek(lexer) == 't' {
-        if          next(lexer) == 'r' {
-            if      next(lexer) == 'u' {
-                if  next(lexer) == 'e' {
-                    next(lexer);
-                    return cast(int) Token.True;
-                }
-            }
-        }
-    } else if           peek(lexer) == 'f' {
-        if              next(lexer) == 'a' {
-            if          next(lexer) == 'l' {
-                if      next(lexer) == 's' {
-                    if  next(lexer) == 'e' {
-                        next(lexer);
-                        return cast(int) Token.False;
-                    }
-                }
-            }
+
+
+///////////////////////////
+//
+// LEXER
+///////////////////////////
+
+EOF :: utf8.RUNE_EOF;
+EOB :: '\x00';
+
+Lexer :: struct {
+    using cursor : Cursor,
+    path   : string,
+    source : string,
+    char   : rune,
+    skip   : int,
+    errors : int,
+}
+
+lex_error :: inline proc(using lexer : ^Lexer, format : string, args : ...any, loc := #caller_location) {
+    message := fmt.aprintf(format, ...args);
+    defer free(message);
+
+    fmt.printf_err("%s(%d,%d) Lexing error: %s\n", path, lines, chars, message);
+
+    errors += 1;
+}
+
+next_char :: inline proc(using lexer : ^Lexer) -> rune {
+    index += skip;
+    chars += 1;
+
+    return peek_char(lexer);
+}
+
+peek_char :: inline proc(using lexer : ^Lexer) -> rune {
+    if index < len(source) {
+        if char, skip = utf8.decode_rune(cast([]u8) source[index..]); skip > 0 {
+            return char;
         }
     }
 
-    return 0;
+    char = '\x00';
+    return char;
 }
 
-read_string :: proc(lexer: ^Lexer) -> int {
-    // @todo: handle escaped characters
+lex :: proc(text : string, filename := "") -> []Token {
+    using lexer := Lexer {
+        cursor = Cursor{lines=1, chars=1},
+        path   = filename,
+        source = text,
+    };
 
-    if peek(lexer) != '"' do
-        return 0;
+    tokens : [dynamic]Token;
 
-    for {
-        match next(lexer) {
-        case '"':
-            next(lexer);
-            return cast(int) Token.String;
-        
-        case '\x00':
-            return cast(int) Error.Unexpected_EOF;
+    peek_char(&lexer);
 
-        case '\r': fallthrough;
-        case '\n':
-            return cast(int) Error.Unexpected_Line_Break;
-        }
-    }
+    loop: for {
+        for {
+            switch char {
+            case ' ', '\t':
+                next_char(&lexer);
+                continue;
 
-    // @note: should I put a length limit?
-    // this could go on for quite a while
-    // if someone forgets a closing quote
-    assert(false, "unreachable code");
-    return 0;
-}
+            case '\r':
+                if next_char(&lexer) == '\n' {
+                    next_char(&lexer);
+                }
+                fallthrough;
 
-read_number :: proc(lexer: ^Lexer) -> int {
-    // @todo: e+/- notation
-    radix := false;
+            case '\n':
+                lines += 1;
+                chars  = 1;
+                continue;
+            }
 
-    char := peek(lexer);
-
-    if !is_digit(char) && char != '-' do
-        return 0;
-
-    for ;; char = next(lexer) do
-        if char == '.' do
-            if radix do
-                return cast(int) Error.Double_Radix;
-            else do
-                radix = true;
-        else if !is_digit(char) do
             break;
-    
-    return radix ? cast(int) Token.Float : cast(int) Token.Integer;
-}
+        }
 
-read_symbol :: proc(lexer: ^Lexer) -> int {
-    match peek(lexer) {
-    case '[': 
-        next(lexer);
-        return cast(int) Token.Start_Array;
-    case ']': 
-        next(lexer);
-        return cast(int) Token.End_Array;
-    case '{': 
-        next(lexer);
-        return cast(int) Token.Start_Object;
-    case '}': 
-        next(lexer);
-        return cast(int) Token.End_Object;
-    case ':': 
-        next(lexer);
-        return cast(int) Token.Pair;
-    case ',': 
-        next(lexer);
-        return cast(int) Token.Comma;
+        kind     := Kind.Invalid;
+        bookmark := cursor;
+
+        switch char {
+        case 'A'...'Z', 'a'...'z', '_':
+            kind = Kind.Symbol;
+
+            for {
+                switch next_char(&lexer) {
+                case 'A'...'Z': fallthrough;
+                case 'a'...'z': fallthrough;
+                case '0'...'9': fallthrough;
+                case  '_':      continue;
+                }
+
+                break;
+            }
+
+            switch source[bookmark.index..lexer.index] {
+            case "null":  kind = Kind.Null;
+            case "true":  kind = Kind.True;
+            case "false": kind = Kind.False;
+            }
+
+        case '+', '-':
+            switch next_char(&lexer) {
+            case '0'...'9': // continue
+            case:           
+            }
+            fallthrough;
+
+        case '0'...'9':
+            kind = Kind.Integer;
+
+            for {
+                switch next_char(&lexer) {
+                case '0'...'9': continue;
+                case '.':
+                    if kind == Kind.Float {
+                        lex_error(&lexer, "Double radix in float");
+                    } else {
+                        kind = Kind.Float;
+                    }
+                    continue;
+                }
+
+                break;
+            }
+
+        case '"':
+            kind = Kind.String;
+
+            // @todo(bpunsky): proper string parsing? or just handle when converting to a value?
+
+            esc := false;
+
+            for {
+                switch next_char(&lexer) {
+                case '\\':
+                    esc = !esc;
+                    continue;
+                
+                case '"':
+                    if esc {
+                        esc = false;
+                        continue;
+                    } else {
+                        next_char(&lexer);
+                    }
+                
+                case:
+                    if esc do esc = false;
+                    continue;
+                }
+
+                break;
+            }
+
+        case ',':
+            kind = Kind.Comma;
+            next_char(&lexer);
+
+        case ':':
+            kind = Kind.Colon;
+            next_char(&lexer);
+
+        case '{':
+            kind = Kind.Open_Brace;
+            next_char(&lexer);
+
+        case '}':
+            kind = Kind.Close_Brace;
+            next_char(&lexer);
+
+        case '[':
+            kind = Kind.Open_Bracket;
+            next_char(&lexer);
+
+        case ']':
+            kind = Kind.Close_Bracket;
+            next_char(&lexer);
+
+        case EOB, EOF: break loop;
+
+        case:
+            lex_error(&lexer, "Illegal rune '%v'", char);
+            next_char(&lexer);
+        }
+
+        append(&tokens, Token{bookmark, kind, source[bookmark.index..lexer.index]});
     }
 
-    return 0;
+    if errors > 0 {
+        fmt.printf_err("%d errors", errors);
+        free(tokens);
+        panic(); // @fix(bpunsky)
+        return nil;
+    }
+
+    append(&tokens, Token{cursor, Kind.End, ""});
+
+    return tokens[..];
 }
 
-eat_whitespace :: proc(lexer: ^Lexer) {
-    for char := peek(lexer);; char = next(lexer) {
-        match char {
-        case ' ':  //
-        case '\t': // do nothing.
-        case '\v': //
 
-        case '\r':
-            tmp := swap_cursor(lexer, lexer.cursor);
-            if next(lexer) != '\n' do
-                line_break(lexer);
-            swap_cursor(lexer, tmp);
 
-        case '\n': line_break(lexer);
+///////////////////////////
+//
+// PARSING
+///////////////////////////
 
-        case: return;
+Parser :: struct {
+    spec : Spec,
+
+    filename : string,
+    source   : string,
+
+    tokens : []Token,
+    index  : int,
+
+    errors : int,
+}
+
+parse_error :: proc(using parser : ^Parser, message : string, args : ...any, loc := #caller_location) {
+    msg := fmt.aprintf(message, ...args);
+    defer free(msg);
+
+    if index < len(tokens) {
+        token := tokens[index];
+        fmt.printf_err("%s(%d,%d) Error: %s\n", filename, token.lines, token.chars, msg);
+    } else {
+        fmt.printf_err("%s Error: %s\n", filename, msg);
+    }
+
+    errors += 1;
+}
+
+allow :: proc(using parser : ^Parser, kinds : ...Kind) -> ^Token {
+    if index >= len(tokens) do return nil;
+
+    token := &tokens[index];
+
+    for kind in kinds {
+        if token.kind == kind {
+            index += 1;
+            return token;
         }
     }
+
+    return nil;
 }
 
-// @todo: import "leksa.odin" instead to avoid name collision
-get_next :: proc(lexer: ^Lexer) -> (Lexeme, int) #inline {
-    lex: Lexeme;
-    i:   int;
+expect :: proc(using parser : ^Parser, kinds : ...Kind, loc := #caller_location) -> ^Token {
+    token := allow(parser, ...kinds);
 
-    eat_whitespace(lexer);
-    
-    if lex, i = read(lexer, read_symbol); i != 0 do return lex, i;
-    if lex, i = read(lexer, read_string); i != 0 do return lex, i;
-    if lex, i = read(lexer, read_number); i != 0 do return lex, i;
-    if lex, i = read(lexer, read_bool);   i != 0 do return lex, i;
-    if lex, i = read(lexer, read_null);   i != 0 do return lex, i;
-    
-    return lex, i;
-}
-
-expect :: proc(lexer: ^Lexer, tokens: ...Token) -> (Lexeme, bool) #inline {
-    lexeme, n := get_next(lexer);
-
-    for token in tokens do if n == cast(int) token do return lexeme, true;
-
-    swap_cursor(lexer, lexeme.cursor);
-
-    match {
-    case n > 0: fmt.printf("Expected `%v`; got `%v`.\r\n", tokens, cast(Token) n);
-    case n < 0: fmt.printf("Expected `%v`; got `%v`.\r\n", tokens, cast(Error) n);
-    case:       fmt.printf("Expected `%v`; got something totally wack.\r\n", tokens); // @todo: better error message
+    if token == nil {
+        if index >= len(tokens) {
+            parse_error(parser, "Cannot look past the end of the token stream");
+        } else {
+            parse_error(parser, "Expected %v; got %v", kinds, token.kind, loc);
+        }
     }
 
-    return lexeme, false;
+    return token;
 }
 
-consume :: proc(lexer: ^Lexer, tokens: ...Token) -> bool #inline {
-    cursor := swap_cursor(lexer, lexer.cursor);
+skip :: proc(using parser : ^Parser, kinds : ...Kind) {
+    for token := allow(parser, ...kinds); token != nil; token = allow(parser, ...kinds) {
+        // continue
+    }
+}
 
-    _, n := get_next(lexer);
+parse :: proc(using parser : ^Parser) -> (value : Value, success := true) {
+    if rhs := allow(parser, Kind.Open_Brace, Kind.Open_Bracket, Kind.Float, Kind.Integer, Kind.String, Kind.True, Kind.False, Kind.Null); rhs != nil {
+        switch rhs.kind {
+        case Kind.Open_Brace:
+            object : Object;
+            
+            for {
+                if lhs := allow(parser, Kind.String, Kind.Symbol); lhs != nil {
+                    if expect(parser, Kind.Colon) == nil do success = false;
+                    
+                    if val, ok := parse(parser); ok {
+                        text := unescape_string(lhs.text);
+                        object[text] = val;
+                    } else {
+                        if expect(parser, Kind.Close_Brace) == nil do success = false;
+                        break;
+                    }
+                } else {
+                    if expect(parser, Kind.Close_Brace) == nil do success = false;
+                    break;
+                }
 
-    for token in tokens do if n == cast(int) token do return true;
+                if allow(parser, Kind.Comma) == nil {
+                    if expect(parser, Kind.Close_Brace) == nil do success = false;
+                    break;
+                }
+            }
+            
+            value.value = object;
 
-    swap_cursor(lexer, cursor);
+        case Kind.Open_Bracket:
+            array : Array;
+            
+            for {
+                if val, ok := parse(parser); ok {
+                    append(&array, val);
+                } else {
+                    if expect(parser, Kind.Close_Bracket) == nil do success = false;
+                    break;
+                }
+
+                if allow(parser, Kind.Comma) == nil {
+                    if expect(parser, Kind.Close_Bracket) == nil do success = false;
+                    break;
+                }
+            }
+
+            value.value = array;
+
+        case Kind.String:  value.value = unescape_string(rhs.text);
+        case Kind.Integer: value.value = strconv.parse_i64(rhs.text);
+        case Kind.Float:   value.value = strconv.parse_f64(rhs.text);
+        case Kind.True:    value.value = true;
+        case Kind.False:   value.value = false;
+        case Kind.Null:    value.value = Null{};
+
+        case: success = false;
+        }
+    } else {
+        success = false;
+    }
+
+    return;
+}
+
+parse_string :: inline proc(text : string, spec := Spec.JSON, path := "") -> (Value, bool) {
+    parser := Parser{
+        spec     = spec,
+        filename = path,
+        source   = text,
+        tokens   = lex(text, path),
+    };
+
+    return parse(&parser);
+}
+
+parse_file :: inline proc(path: string, spec := Spec.JSON) -> (Value, bool) {
+    if bytes, ok := os.read_entire_file(path); ok {
+        return parse_string(string(bytes), spec, path);
+    }
+
+    return Value{}, false;
+}
+
+
+
+///////////////////////////
+//
+// PRINTING
+///////////////////////////
+
+buffer_print :: proc(buf: ^fmt.String_Buffer, value: Value, spec := Spec.JSON, indent := 0) {
+    switch v in value.value {
+    case Object:
+        fmt.sbprintln(buf, "{");
+        
+        i := 0;
+        for key, value in v {
+            for _ in 0...indent do fmt.sbprint(buf, "    ");
+ 
+            if spec == Spec.JSON do fmt.sbprint(buf, "\"");
+            fmt.sbprint(buf, escape_string(key)); // @todo: check for whitespace in JSON5
+            if spec == Spec.JSON do fmt.sbprint(buf, "\"");
+ 
+            fmt.sbprint(buf, ": ");
+ 
+            buffer_print(buf, value, spec, indent+1);
+
+            if i != len(v)-1 || spec == Spec.JSON5 do fmt.sbprint(buf, ",");
+
+            fmt.sbprintln(buf);
+
+            i += 1;
+        }
+
+        for _ in 0..indent do fmt.sbprint(buf, "    ");
+
+        fmt.sbprint(buf, "}");
+
+    case Array:
+        fmt.sbprintln(buf, "[");
+
+        for value, i in v {
+            for _ in 0...indent do fmt.sbprint(buf, "    ");
+
+            buffer_print(buf, value, spec, indent+1);
+
+            if i != len(v)-1 || spec == Spec.JSON5 do fmt.sbprint(buf, ",");
+
+            fmt.sbprintln(buf);
+        }
+
+        for _ in 0..indent do fmt.sbprint(buf, "    ");
+
+        fmt.sbprint(buf, "]");
+
+    case String: fmt.sbprintf(buf, "\"%s\"", escape_string(v));
+    case Bool:   fmt.sbprint(buf, v);
+    case Float:  fmt.sbprint(buf, v);
+    case Int:    fmt.sbprint(buf, v);
+    case Null:   fmt.sbprint(buf, "null");
+    case:        fmt.sbprint(buf, "!!!INVALID!!!");
+    }
+}
+
+to_string :: inline proc(value: Value, spec := Spec.JSON) -> string {
+    buf : fmt.String_Buffer;
+    buffer_print(&buf, value, spec);
+    return fmt.to_string(buf);
+}
+
+print :: inline proc(value: Value, spec := Spec.JSON) {
+    json := to_string(value, spec);
+    defer free(json);
+
+    fmt.printf("\n%s\n\n", json);
+}
+
+
+
+///////////////////////////
+//
+// MARSHALLING
+///////////////////////////
+
+marshal :: proc(data: any, spec := Spec.JSON) -> (value : Value, success := true) {
+    type_info := type_info_base_without_enum(data.type_info);
+    type_info  = type_info_base_without_enum(type_info);
+
+    switch v in type_info.variant {
+    case Type_Info_Integer:
+        i: Int;
+
+        switch type_info.size {
+        case 8:  i = cast(Int) (cast(^i64)  data.data)^;
+        case 4:  i = cast(Int) (cast(^i32)  data.data)^;
+        case 2:  i = cast(Int) (cast(^i16)  data.data)^;
+        case 1:  i = cast(Int) (cast(^i8)   data.data)^;
+        }
+
+        value.value = i;
+
+    case Type_Info_Float:
+        f: Float;
+
+        switch type_info.size {
+        case 8: f = cast(Float) (cast(^f64) data.data)^;
+        case 4: f = cast(Float) (cast(^f32) data.data)^;
+        }
+
+        value.value = f;
+
+    case Type_Info_String:
+        str := (cast(^string) data.data)^;
+        str = unescape_string(str);
+        value.value = cast(String) str;
+
+    case Type_Info_Boolean:
+        b := cast(Bool) (cast(^bool) data.data)^;
+        value.value = b;
+
+    case Type_Info_Array:
+        array := make([dynamic]Value, 0, v.count);
+
+        for i in 0..v.count {
+            if tmp, ok := marshal(transmute(any) raw.Any{rawptr(uintptr(data.data) + uintptr(v.elem_size*i)), v.elem}, spec); ok {
+                append(&array, tmp);
+            } else {
+                success = false;
+                return;
+            }
+        }
+
+        value.value = cast(Array) array;
+
+    case Type_Info_Slice:
+        a := cast(^raw.Slice) data.data;
+
+        array := make([dynamic]Value, 0, a.len);
+
+        for i in 0..a.len {
+            if tmp, ok := marshal(transmute(any) raw.Any{rawptr(uintptr(a.data) + uintptr(v.elem_size*i)), v.elem}, spec); ok {
+                append(&array, tmp);
+            } else {
+                success = false;
+                return;
+            }
+        }
+
+        value.value = cast(Array) array;
+
+    case Type_Info_Dynamic_Array:
+        array := make([dynamic]Value);
+
+        a := cast(^raw.Dynamic_Array) data.data;
+
+        for i in 0..a.len {
+            if tmp, ok := marshal(transmute(any) raw.Any{rawptr(uintptr(a.data) + uintptr(v.elem_size*i)), v.elem}, spec); ok {
+                append(&array, tmp);
+            } else {
+                success = false;
+                return;
+            }
+        }
+
+        value.value = cast(Array) array;
+
+    case Type_Info_Struct:
+        object: map[string]Value;
+
+        for ti, i in v.types {
+            if tmp, ok := marshal(transmute(any) raw.Any{rawptr(uintptr(data.data) + uintptr(v.offsets[i])), ti}, spec); ok {
+                object[v.names[i]] = tmp;
+            } else {
+                success = false;
+                return;
+            }
+        }
+
+        value.value = cast(Object) object;
+
+    case Type_Info_Map:
+        // @todo: implement. ask bill about this, maps are fucky
+        success = false;
+
+    case: success = false;
+    }
+
+    return;
+}
+
+marshal_string :: inline proc(data: any, spec := Spec.JSON) -> (string, bool) {
+    if value, ok := marshal(data, spec); ok {
+        return to_string(value, spec), true;
+    }
+
+    return "", false;
+}
+
+marshal_file :: inline proc(path: string, data: any, spec := Spec.JSON) -> bool {
+    if str, ok := marshal_string(data, spec); ok {
+        return !os.write_entire_file(path, cast([]u8) str);
+    }
 
     return false;
 }
 
-// @todo: name-type matching version (json string matches field) instead of order-type matching
-_parse_inner :: proc(lexer: ^Lexer, type_info: ^Type_Info, data: rawptr) -> bool {
-    type_info = type_info_base_without_enum(type_info);
-    type_info = type_info_base_without_enum(type_info);
-    // @todo: this is a hack, write a simple function to recurse to the basest base
+
+
+///////////////////////////
+//
+// UNMARSHALLING
+///////////////////////////
+
+unmarshal :: proc[unmarshal_value_to_any, unmarshal_value_to_type];
+
+unmarshal_value_to_any :: proc(data : any, value : Value, spec := Spec.JSON) -> bool {
+    type_info := type_info_base_without_enum(data.type_info);
+    type_info  = type_info_base_without_enum(type_info); // @todo: dirty fucking hack, won't hold up
+
+    switch v in value.value {
+    case Object:
+        switch variant in type_info.variant {
+        case Type_Info_Struct:
+            for field, i in variant.names {
+                // @todo: stricter type checking and by-order instead of by-name as an option
+                a := transmute(any) raw.Any{rawptr(uintptr(data.data) + uintptr(variant.offsets[i])), variant.types[i]};
+                if !unmarshal(a, v[field], spec) do return false; // @error
+            }
+
+            return true; 
         
-    if consume(lexer, Token.Null) {
-        mem.set(data, 0, type_info.size);
+        case Type_Info_Map:
+            // @todo: implement. ask bill about this, maps are a daunting prospect because they're fairly opaque
+        }
+
+        return false; // @error
+
+    case Array:
+        switch variant in type_info.variant {
+        case Type_Info_Array:
+            if len(v) > variant.count do return false; // @error
+
+            for i in 0..variant.count {
+                a := transmute(any) raw.Any{rawptr(uintptr(data.data) + uintptr(variant.elem_size * i)), variant.elem};
+                if !unmarshal(a, v[i], spec) do return false; // @error
+            }
+
+            return true;
+
+        case Type_Info_Slice:
+            array := cast(^raw.Slice) data.data;
+
+            if len(v) > array.len do return false; // @error
+            array.len = len(v);
+
+            for i in 0..array.len {
+                a := transmute(any) raw.Any{rawptr(uintptr(array.data) + uintptr(variant.elem_size * i)), variant.elem};
+                if !unmarshal(a, v[i], spec) do return false; // @error
+            }
+
+            return true;
+
+        case Type_Info_Dynamic_Array:
+            array := cast(^raw.Dynamic_Array) data.data;
+
+            if array.cap == 0 {
+                array.data      = alloc(len(v)*variant.elem_size);
+                array.cap       = len(v);
+                array.allocator = context.allocator;
+            }
+
+            if len(v) > array.cap do context <- mem.context_from_allocator(array.allocator) do resize(array.data, array.cap, len(v)*variant.elem_size);
+            array.len = len(v);
+
+            for i in 0..array.len {
+                a := transmute(any) raw.Any{rawptr(uintptr(array.data) + uintptr(variant.elem_size * i)), variant.elem};
+                if !unmarshal(a, v[i], spec) do return false; // @error
+            }
+
+            return true;
+
+        case: return false; // @error
+        }
+
+    case String:
+        if _, ok := type_info.variant.(Type_Info_String); ok {
+            tmp := cast(string) v;
+            mem.copy(data.data, &tmp, size_of(string));
+
+            return true;
+        }
+
+        return false; // @error
+
+    case Int:
+        if _, ok := type_info.variant.(Type_Info_Integer); ok {
+            switch type_info.size {
+            case 8:
+                tmp := i64(v);
+                mem.copy(data.data, &tmp, type_info.size);
+
+            case 4:
+                tmp := i32(v);
+                mem.copy(data.data, &tmp, type_info.size);
+
+            case 2:
+                tmp := i16(v);
+                mem.copy(data.data, &tmp, type_info.size);
+
+            case 1:
+                tmp := i8(v);
+                mem.copy(data.data, &tmp, type_info.size);
+
+            case: return false; // @error
+            }
+
+            return true;
+        }
+
+        return false; // @error
+
+    case Float:
+        if _, ok := type_info.variant.(Type_Info_Float); ok {
+            switch type_info.size {
+            case 8:
+                tmp := f64(v);
+                mem.copy(data.data, &tmp, type_info.size);
+
+            case 4:
+                tmp := f32(v);
+                mem.copy(data.data, &tmp, type_info.size);
+
+            case: return false; // @error
+            }
+
+            return true;
+        }
+
+        return false; // @error
+
+    case Bool:
+        if _, ok := type_info.variant.(Type_Info_Boolean); ok {
+            tmp := bool(v);
+            mem.copy(data.data, &tmp, type_info.size);
+
+            return true;
+        }
+
+        return false; // @error
+
+    case Null:
+        mem.set(data.data, 0, type_info.size);
         return true;
-    }
-
-    match v in type_info.variant {
-    case Type_Info.Struct:
-        if _, ok := expect(lexer, Token.Start_Object); !ok do return false; // @error
-
-        for t, i in v.types {
-            if i != 0 && !consume(lexer, Token.Comma) do return false; // @error
-
-            if _, ok := expect(lexer, Token.String); !ok do return false; // @error
-            if _, ok := expect(lexer, Token.Pair);   !ok do return false; // @error
-                
-            if !_parse_inner(lexer, t, cast(^u8) data + v.offsets[i]) do return false; // @error
-        }
-
-        if consume(lexer, Token.Comma) && false do return false; // @error
-
-        if _, ok := expect(lexer, Token.End_Object); !ok do return false; // @error
-
-    case Type_Info.Pointer:
-        ptr := alloc(v.elem.size);
-
-        if !_parse_inner(lexer, v.elem, ptr) do return false; // @error
-        
-        mem.copy(data, &ptr, type_info.size); // @note: wonky?
-
-    case Type_Info.Any:
-        //ptr := alloc(v.elem.size);
-        return false;
-        // @todo: fuuuuuuuuuuuuuuuuuuuuuuuu
-        // this can be anything so I can't pass a `^Type_Info`
-        // I'll have to use largest size for numbers and use a new
-        // proc that bases the size on the json instead of the odin
-        //mem.copy(data, &ptr, type_info.size);
-
-    case Type_Info.String:
-        lexeme: Lexeme;
-        ok:     bool;
-
-        if lexeme, ok = expect(lexer, Token.String); !ok do return false; // @error
-
-        value := clone_string(lexeme.text);
-        mem.copy(data, &value, type_info.size);
-
-    case Type_Info.Integer:
-        lexeme: Lexeme;
-        ok:     bool;
-
-        if lexeme, ok = expect(lexer, Token.Integer); !ok do return false; // @error
-
-        _value := parse_i128(lexeme.text);
-
-        match type_info.size {
-        case 16: mem.copy(data, &_value, type_info.size); 
-
-        case 8:
-            value := cast(i64) _value;
-            mem.copy(data, &value, type_info.size);
-        
-        case 4:
-            value := cast(i32) _value;
-            mem.copy(data, &value, type_info.size); 
-        
-        case 2:
-            value := cast(i16) _value;
-            mem.copy(data, &value, type_info.size); 
-        
-        case 1:
-            value := cast(i8) _value;
-            mem.copy(data, &value, type_info.size); 
-        
-        case: return false; // @error
-        }
-
-    case Type_Info.Float:
-        lexeme: Lexeme;
-        ok:     bool;
-
-        if lexeme, ok = expect(lexer, Token.Float); !ok do return false; // @error
-
-        _value := parse_f64(lexeme.text);
-
-        match type_info.size {
-        case 8: mem.copy(data, &_value, type_info.size);
-        
-        case 4: 
-            value := cast(f32) _value;
-            mem.copy(data, &value, type_info.size);
-
-        case: return false; // @error
-        }
-
-    case Type_Info.Boolean:
-        lexeme: Lexeme;
-        ok:     bool;
-        
-        value: bool;
-
-        if consume(lexer, Token.True) {
-            value = true;
-            mem.copy(data, &value, type_info.size);
-        } else if consume(lexer, Token.False) {
-            mem.copy(data, &value, type_info.size);
-        } else do return false; // @error
-
-    case Type_Info.Array:
-        if !consume(lexer, Token.Start_Array) do return false; // @error
-
-        for i in 0..v.count {
-            if i != 0 && !consume(lexer, Token.Comma) do return false; // @error
-
-            if !_parse_inner(lexer, v.elem, cast(^u8) data + v.elem_size * i) do return false; // @error
-        }
-
-        if consume(lexer, Token.Comma) && false do return false; // @error: also, replace false with a flag
-
-        if !consume(lexer, Token.End_Array) do return false; // @error
     
-    case Type_Info.Vector:
-        if !consume(lexer, Token.Start_Array) do return false; // @error
-
-        for i in 0..v.count {
-            if i != 0 && !consume(lexer, Token.Comma) do return false; // @error
-
-            if !_parse_inner(lexer, v.elem, cast(^u8) data + v.elem_size * i) do return false; // @error
-        }
-
-        if consume(lexer, Token.Comma) && false do return false; // @error: also, replace false with a flag
-
-        if !consume(lexer, Token.End_Array) do return false; // @error
-
-    case Type_Info.Slice:
-        //if !expect(lexer, Token.Start_Array) do return false; // @error
-
-        return false;
-        // @todo: implement
-
-        //if !expect(lexer, Token.End_Array) do return false; // @error
-
-    case Type_Info.Dynamic_Array:
-        //if !expect(lexer, Token.Start_Array) do return false; // @error
-
-        return false;
-        // @todo: implement
-
-        //if !expect(lexer, Token.End_Array) do return false; // @error
-
-    // @todo: Type_Info.Enum      (should already work)
-    // @todo: Type_Info.Map       (same as struct?)
-    // @todo: Type_Info.Bit_Field (string!?)
-    // @todo: Type_Info.Complex   (string?)
-    // @todo: Type_Info.Rune      (need to unescape strings first to get one char)
-
     case: return false; // @error
     }
 
-    return true;
+    panic("Unreachable code.");
+    return false;
 }
 
-parse :: proc(T: type, json: string) -> T #inline {
-    result: T;
-
-    lexer := make_lexer(json);
-
-    if _parse_inner(&result, &lexer) do
-        return result, true;
-    
-    return result, false;
+unmarshal_value_to_type :: inline proc(T : type, value : Value, spec := Spec.JSON) -> (T, bool) {
+    tmp: T;
+    ok := unmarshal(tmp, value, spec);
+    return tmp, ok;
 }
 
-parse_file :: proc(T: type, path: string) -> (T, bool) #inline {
-    result: T;
 
-    lexer, ok := load_lexer(path);
-    if !ok do return result, false;
+unmarshal_string :: proc[unmarshal_string_to_any, unmarshal_string_to_type];
 
-    if _parse_inner(&lexer, type_info_of(T), &result) do
-        return result, true;
-    
-    return result, false;
+unmarshal_string_to_any :: inline proc(data : any, json : string, spec := Spec.JSON) -> bool {
+    if value, ok := parse_string(json, spec); ok {
+        return unmarshal(data, value, spec);
+    }
+
+    return false;
 }
 
-some_number := 0157983579845
+unmarshal_string_to_type :: inline proc(T : type, json : string, spec := Spec.JSON) -> (T, bool) {
+    if value, ok := parse_string(json, spec); ok {
+        res : T;
+        tmp := unmarshal(res, value, spec);
+        return res, tmp;
+    }
+
+    return T{}, false;
+}
+
+
+unmarshal_file :: proc[unmarshal_file_to_any, unmarshal_file_to_type];
+
+unmarshal_file_to_any :: inline proc(data : any, path : string, spec := Spec.JSON) -> bool {
+    if value, ok := parse_file(path, spec); ok {
+        return unmarshal(data, value, spec);
+    }
+
+    return false;
+}
+
+unmarshal_file_to_type :: inline proc(T : type, path : string, spec := Spec.JSON) -> (T, bool) {
+    if value, ok := parse_file(path, spec); ok {
+        fmt.println("yo");
+        res: T;
+        tmp := unmarshal(res, value, spec);
+        return res, tmp;
+    }
+
+    return T{}, false;
+}
