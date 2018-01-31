@@ -6,7 +6,7 @@
  *  @Creation: 28-11-2017 00:10:03 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 31-01-2018 05:29:16 UTC-5
+ *  @Last Time: 31-01-2018 14:38:55 UTC-5
  *  
  *  @Description:
  *  
@@ -247,16 +247,16 @@ lex_error :: inline proc(using lexer : ^Lexer, format : string, args : ...any, l
     errors += 1;
 }
 
-next_char :: inline proc(using lexer : ^Lexer) -> rune {
+next_char :: inline proc"contextless"(using lexer : ^Lexer) -> rune {
     index += skip;
     chars += 1;
 
     return peek_char(lexer);
 }
 
-peek_char :: inline proc(using lexer : ^Lexer) -> rune {
+peek_char :: inline proc"contextless"(using lexer : ^Lexer) -> rune {
     if index < len(source) {
-        if char, skip = utf8.decode_rune(cast([]u8) source[index..]); skip > 0 {
+        #no_bounds_check if char, skip = utf8.decode_rune(cast([]u8) source[index..]); skip > 0 {
             return char;
         }
     }
@@ -317,7 +317,7 @@ lex :: proc(text : string, filename := "") -> []Token {
                 break;
             }
 
-            switch source[bookmark.index..lexer.index] {
+            #no_bounds_check switch source[bookmark.index..lexer.index] {
             case "null":  kind = Kind.Null;
             case "true":  kind = Kind.True;
             case "false": kind = Kind.False;

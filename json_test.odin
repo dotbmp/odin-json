@@ -6,7 +6,7 @@
  *  @Creation: 31-01-2018 00:26:30 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 31-01-2018 05:30:55 UTC-5
+ *  @Last Time: 31-01-2018 14:42:30 UTC-5
  *  
  *  @Description:
  *  
@@ -92,8 +92,8 @@ test3 :: proc() {
     json := `
 {
     "bools": [false, true, true, false],
-    "foo": "Hello, World!",
-    "bar": 123
+    "foo":   "Hello, World!",
+    "bar":   123
 }
     `;
 
