@@ -6,7 +6,7 @@
  *  @Creation: 31-01-2018 00:26:30 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 31-01-2018 14:42:30 UTC-5
+ *  @Last Time: 31-01-2018 15:03:52 UTC-5
  *  
  *  @Description:
  *  
@@ -207,25 +207,45 @@ test7 :: proc() {
     }
 }
 
-profile_lexer :: proc() {
+profile :: proc() {
     FILE :: "jeopardy.json";
 
     if bytes, ok := os.read_entire_file(FILE); ok {
+        parser := Parser{
+            spec     = Spec.JSON,
+            filename = FILE,
+            source   = string(bytes),
+        };
+
         timer := tempo.make_timer();
         
-        tokens := lex(string(bytes));
+        parser.tokens = lex(string(bytes), FILE);
 
-        time := tempo.query(&timer);
+        lex_time := tempo.query(&timer);
+        tempo.start(&timer);
 
-        fmt.printf("%d tokens in %fms, %f ms/token, %f tokens/ms\n",
-            len(tokens),
-            tempo.ms(time),
-            tempo.ms(time)/f64(len(tokens)),
-            f64(len(tokens))/tempo.ms(time),
-        );
+        if _, ok := parse(&parser); ok {
+            parse_time := tempo.query(&timer);
+
+            num_tokens := len(parser.tokens);
+            
+            fmt.printf("lexer:  %d tokens in %f ms, %f ms/token, %f tokens/ms\n",
+                len(parser.tokens),
+                tempo.ms(lex_time),
+                tempo.ms(lex_time)/f64(num_tokens),
+                f64(num_tokens)/tempo.ms(lex_time),
+            );
+
+            fmt.printf("parser: %d tokens in %f ms, %f ms/token, %f tokens/ms\n",
+                num_tokens,
+                tempo.ms(parse_time),
+                tempo.ms(parse_time)/f64(num_tokens),
+                f64(num_tokens)/tempo.ms(parse_time),
+            );
+        }
     }
 }
 
 main :: proc() {
-    profile_lexer();
+    profile();
 }

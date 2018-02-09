@@ -6,7 +6,7 @@
  *  @Creation: 28-11-2017 00:10:03 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 31-01-2018 14:38:55 UTC-5
+ *  @Last Time: 07-02-2018 12:20:35 UTC-5
  *  
  *  @Description:
  *  
@@ -19,6 +19,8 @@ import "core:raw.odin"
 import "core:strconv.odin"
 import "core:utf8.odin"
 import "core:utf16.odin"
+
+import pat "shared:path.odin"
 
 
 
@@ -145,13 +147,13 @@ unescape_string :: proc(str: string) -> string {
 
 Spec :: enum {JSON, JSON5};
 
-Null   ::             rawptr;
-Int    :: #type_alias i64;
-Float  :: #type_alias f64;
-Bool   :: #type_alias bool;
-String :: #type_alias string;
-Array  ::             [dynamic]Value;
-Object ::             map[string]Value;
+Null   :: distinct rawptr;
+Int    ::          i64;
+Float  ::          f64;
+Bool   ::          bool;
+String ::          string;
+Array  :: distinct [dynamic]Value;
+Object :: distinct map[string]Value;
 
 Value :: struct {
     using token : Token,
@@ -288,9 +290,12 @@ lex :: proc(text : string, filename := "") -> []Token {
                 if next_char(&lexer) == '\n' {
                     next_char(&lexer);
                 }
-                fallthrough;
+                lines += 1;
+                chars  = 1;
+                continue;
 
             case '\n':
+                next_char(&lexer);
                 lines += 1;
                 chars  = 1;
                 continue;
@@ -566,8 +571,6 @@ parse_string :: inline proc(text : string, spec := Spec.JSON, path := "") -> (Va
 
     return parse(&parser);
 }
-
-import pat "shared:path.odin"
 
 parse_file :: inline proc(path: string, spec := Spec.JSON) -> (Value, bool) {
     if bytes, ok := os.read_entire_file(path); ok {
