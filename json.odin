@@ -6,7 +6,7 @@
  *  @Creation: 28-11-2017 00:10:03 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 14-02-2018 19:57:23 UTC-5
+ *  @Last Time: 14-02-2018 20:27:15 UTC-5
  *  
  *  @Description:
  *  
@@ -99,7 +99,7 @@ unescape_string :: proc(str: string) -> string {
 
             case 'u':
                 lo, hi: rune;
-                hex := [...]u8{'0', 'x', '0', '0', '0', '0'};
+                hex := [?]u8{'0', 'x', '0', '0', '0', '0'};
 
                 c0, s0 := utf8.decode_rune(cast([]u8) str[i..]); hex[2] = cast(u8) c0; i += s0;
                 c1, s1 := utf8.decode_rune(cast([]u8) str[i..]); hex[3] = cast(u8) c1; i += s1;
