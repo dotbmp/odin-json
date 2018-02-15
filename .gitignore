@@ -2,3 +2,5 @@
 *.exe
 
 *.sublime-workspace
+
+*.pdb

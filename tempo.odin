@@ -17,7 +17,7 @@ to_12_hour :: inline proc(hour: int) -> (h: int, pm: bool) do return hour >= 12 
 
 forfeit :: inline proc() do w32.sleep(0); // forfeits remaining time in OS timeslot
 
-Duration :: f64;
+Duration :: distinct f64;
 
 sleep :: inline proc(d: Duration) do w32.sleep(cast(i32)math.round(ms(d)));
 
@@ -41,15 +41,15 @@ from_seconds     :: inline proc(n: f64) -> Duration do return      ms(n * 1000);
 from_ms          :: inline proc(n: f64) -> Duration do return      ns(n * 1000);
 from_ns          :: inline proc(n: f64) -> Duration do return  cast(Duration) n;
 
-duration_years   :: inline proc(n: int) -> Duration do return    years(cast(f64) n);
-duration_months  :: inline proc(n: int) -> Duration do return   months(cast(f64) n);
-duration_weeks   :: inline proc(n: int) -> Duration do return    weeks(cast(f64) n);
-duration_days    :: inline proc(n: int) -> Duration do return     days(cast(f64) n);
-duration_hours   :: inline proc(n: int) -> Duration do return    hours(cast(f64) n);
-duration_minutes :: inline proc(n: int) -> Duration do return  minutes(cast(f64) n);
-duration_seconds :: inline proc(n: int) -> Duration do return  seconds(cast(f64) n);
-duration_ms      :: inline proc(n: int) -> Duration do return       ms(cast(f64) n);
-duration_ns      :: inline proc(n: int) -> Duration do return       ns(cast(f64) n);
+duration_years   :: inline proc(n: int) -> Duration do return   years(cast(f64) n);
+duration_months  :: inline proc(n: int) -> Duration do return  months(cast(f64) n);
+duration_weeks   :: inline proc(n: int) -> Duration do return   weeks(cast(f64) n);
+duration_days    :: inline proc(n: int) -> Duration do return    days(cast(f64) n);
+duration_hours   :: inline proc(n: int) -> Duration do return   hours(cast(f64) n);
+duration_minutes :: inline proc(n: int) -> Duration do return minutes(cast(f64) n);
+duration_seconds :: inline proc(n: int) -> Duration do return seconds(cast(f64) n);
+duration_ms      :: inline proc(n: int) -> Duration do return      ms(cast(f64) n);
+duration_ns      :: inline proc(n: int) -> Duration do return      ns(cast(f64) n);
 
 to_years         :: inline proc(d: Duration) -> f64 do return    days(d) /  365; // leap years make this an estimate (365.25???)
 to_months        :: inline proc(d: Duration) -> f64 do return    days(d) /   28; // varying months make this an estimate
