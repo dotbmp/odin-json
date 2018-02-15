@@ -6,7 +6,7 @@
  *  @Creation: 31-01-2018 00:26:30 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 31-01-2018 15:03:52 UTC-5
+ *  @Last Time: 14-02-2018 19:56:03 UTC-5
  *  
  *  @Description:
  *  
@@ -123,7 +123,7 @@ test4 :: proc() {
     fmt.println("started...");
     timer := tempo.make_timer();
     
-    if obj, ok := parse_file("jeopardy.json"); ok {
+    if obj, ok := parse_file("test_files/jeopardy.json"); ok {
         fmt.printf("done... (%f sec)\n\n", tempo.seconds(tempo.query(&timer)));
         
         messages := make([dynamic]Message, 0, 300_000);
@@ -173,7 +173,7 @@ test5 :: proc() {
     fmt.println("started...");
     timer := tempo.make_timer();
 
-    if root, ok := parse_file("twitch.json"); ok {
+    if root, ok := parse_file("test_files/twitch.json"); ok {
         fmt.printf("done... (%f sec)\n\n", tempo.seconds(tempo.query(&timer)));
         tree_print(root);
     } else {
@@ -208,7 +208,7 @@ test7 :: proc() {
 }
 
 profile :: proc() {
-    FILE :: "jeopardy.json";
+    FILE :: "test_files/jeopardy.json";
 
     if bytes, ok := os.read_entire_file(FILE); ok {
         parser := Parser{

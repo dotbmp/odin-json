@@ -1,0 +1,877 @@
+{
+  "data": {
+    "repository": {
+      "id": "MDEwOlJlcG9zaXRvcnk3NDU4MzY5Mg==",
+      "url": "https://github.com/odin-lang/Odin",
+      "owner": {
+        "login": "odin-lang"
+      },
+      "name": "Odin",
+      "issues": {
+        "nodes": [
+          {
+            "id": "MDU6SXNzdWUxOTMzODU4MzE=",
+            "title": "Big Numbers for Constants",
+            "createdAt": "2016-12-04T23:49:52Z",
+            "author": {
+              "login": "gingerBill",
+              "avatarUrl": "https://avatars3.githubusercontent.com/u/3338141?v=4"
+            },
+            "labels": {
+              "nodes": [
+                {
+                  "color": "84b6eb",
+                  "name": "enhancement"
+                },
+                {
+                  "color": "128A0C",
+                  "name": "help wanted"
+                }
+              ]
+            },
+            "bodyText": "In this language, I want constants to work very similar to how they work in Go. This requires the need for a big numbers library as it needs arbitrary precision for numbers to behaviour as numbers.\nNUM_A :: 1<<100;\nNUM_B :: NUM_A>>90;\n\nShould be valid and result in NUM_B == 1<<10.\nBlog article on how Go constants work: https://blog.golang.org/constants",
+            "comments": {
+              "edges": [
+                {
+                  "node": {
+                    "author": {
+                      "login": "ratchetfreak",
+                      "avatarUrl": "https://avatars0.githubusercontent.com/u/16795580?v=4"
+                    },
+                    "bodyText": "BigNum as a language feature is going to need RAII semantics (destructors and copy/move semantics). As just about all standard implementations will allocate auxiliary memory that needs to be cleaned up.\nThough if you just want something that works for compile-time constant folding then something like gmp (licenced under LGPL v3)  would work. It does both integer and floating point math."
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "gingerBill",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/3338141?v=4"
+                    },
+                    "bodyText": "Sorry for the confusion but I do not want this to be a run time feature but rather a compile time feature for the constant system. I want numbers to just work as number.\ngmp might be a good option so I might have to consider it."
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "Kelimion",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/194614?v=4"
+                    },
+                    "bodyText": "http://www.libtom.net/LibTomMath/ is also a good alternative. Dual licensed as public domain / WTFPL."
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "MDU6SXNzdWUxOTk4Mjc5MDI=",
+            "title": "Regarding C compatibility",
+            "createdAt": "2017-01-10T13:58:24Z",
+            "author": {
+              "login": "flplv",
+              "avatarUrl": "https://avatars0.githubusercontent.com/u/4923963?v=4"
+            },
+            "labels": {
+              "nodes": [
+                {
+                  "color": "cc317c",
+                  "name": "question"
+                }
+              ]
+            },
+            "bodyText": "Hi Bill,\nI've watched your videos and read part of your code, I have to say, it is a very nice proposal this language of yours, I'd be happy to experiment with it.\nI'd like to know what are your thoughts about C compatibility. I know it sounds strange this question, let me put my rationale to your judgment.\nAssembly programming was successfully replaced by the C programming language, as we know today, yet, it is observable that you can still write assembly inside C code. C compilers support it since there's always a corner situation that developers might want to write assembly, such as optimization, integrating old code base or dealing with platform specificities. I anxiously wait for the day that C will be replaced, and the Odin programming language seems to be a competent candidate for that, but as we can learn from C vs assembly, I believe the the replacement will have to support C in a very considerable extent to make the replacement more likely to happen. We have already a lot of code written in C, even more that we had with assembly, also we live in times where there's really a huge amount of different platforms and providers where C runs, creating a very segmented ecosystem that relays on C as its foundation, which will impose even more resistance to a language migration. In face of that facts, I believe that we cannot simply replace C, but we'd have to embrace it in order to later replace it.\nThat's why I wonder how Odin is stands on this matter.\nBest,\nFelipe",
+            "comments": {
+              "edges": [
+                {
+                  "node": {
+                    "author": {
+                      "login": "gingerBill",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/3338141?v=4"
+                    },
+                    "bodyText": "Odin can already interface with static and dynamic library very easily. It's how it interfaces with win32, opengl, and numerous other APIs. See sys/windows.odin for a big example. (The only thing not supported is C-style varargs in the calling conventions but that's due to numerous reasons).\nI do think C can be replaced, but you are correct that there will be a transition period where you want/have to use existing C code. I want this language to replace my needs for C, completely, and I think it is already very possible to do so.\nn.b. I already use Go(lang) for a lot server work and I don't need to interface with C at all as its libraries and tooling is so good that I don't need to interface with C (i.e. cgo)."
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "MDU6SXNzdWUyMTI4NzIyOTQ=",
+            "title": "Multiple Assignment with one declared, one undeclared variable",
+            "createdAt": "2017-03-08T22:10:05Z",
+            "author": {
+              "login": "ruipsrosario",
+              "avatarUrl": "https://avatars3.githubusercontent.com/u/16062743?v=4"
+            },
+            "labels": {
+              "nodes": [
+                {
+                  "color": "cc317c",
+                  "name": "question"
+                }
+              ]
+            },
+            "bodyText": "Hey there,\nI was coding some stuff with Odin and I am currently facing this \"problem\" (not sure if it is by design or not).\nSo imagine you have procedures A and B which both return (AType, string) and (AnotherType, string), respectively.  And you have this snippet of code:\naType, errorString := A();\nanotherType, errorString := B();\n\nThe compiler will complain since the call to procedure B will attempt to redeclare errorString. However, the intent was to reuse errorString, from the declaration of calling A earlier, and declare anotherType. Due to using := the compiler will interpret as declaring both variables. Using = the compiler will complain saying that anotherType isn't defined.\nIs there going to be support to declaring only some variables in a multiple return values procedure call? I know this can be fixed by just declaring all variables earlier, but since Odin does a good job at reducing LOC this could further help reducing it.\nCheers,\nRui Rosário\nexample code, not code from actual situation",
+            "comments": {
+              "edges": [
+                {
+                  "node": {
+                    "author": {
+                      "login": "zangent",
+                      "avatarUrl": "https://avatars0.githubusercontent.com/u/13626644?v=4"
+                    },
+                    "bodyText": "I'm under the impression that something like that would serve to complicate\nthe language more than it needs to be.\n\nFor my code, when I run into that, I just forward declare the variables,\nthen use the assignment operator. It works out fine and isn't really any\nmore complex.\n…\nOn Mar 8, 2017 4:10 PM, \"ruipsrosario\" ***@***.***> wrote:\n Hey there,\n\n I was coding some stuff with Odin and I am currently facing this \"problem\"\n (don't know if it is by design or not).\n\n So imagine you have procedures A and B which both return (AType, string)\n and (AnotherType, string), respectively. And you have this snippet of\n code:\n\n aType, errorString := A();\n anotherType, errorString := B();\n\n The compiler will complain since the call to function B will attempt to\n redeclare errorString. However, the intent was to reuse errorString from\n the declaration of calling A and declare anotherType. Due to using := the\n compiler will interpret as declaring *both* variables. Using = the\n compiler will complain anotherType isn't defined.\n\n *Is there going to be support to declaring only some variables in a\n multiple return values procedure call?* I know this can be fixed by just\n declaring all variables earlier, but since Odin does a good job at reducing\n LOC this could further reduce it.\n\n *example code, not code from actual situation*\n\n Cheers,\n Rui Rosário\n\n —\n You are receiving this because you are subscribed to this thread.\n Reply to this email directly, view it on GitHub\n <#29>, or mute the thread\n <https://github.com/notifications/unsubscribe-auth/AM_tFCCcmaFWRCkIzQk5BwhLciBNODLJks5rjyc9gaJpZM4MXYAx>\n ."
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "ruipsrosario",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/16062743?v=4"
+                    },
+                    "bodyText": "@zangent I don't mind forward declaring variables (I'm already used to that), I was just curious if it was something that was planned but overlooked or just something that was ignored by design."
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "gingerBill",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/3338141?v=4"
+                    },
+                    "bodyText": "TL;DR This is by design and not a mistake.\n:= Is actually : = with the type missing. So what you are doing is double declaration that variable.\n// These three are equivalent in semantics\nx: int; x = 123;\nx: int = 123;\nx := 123;\n\nIf you do have a \"tuple\" value on the right hand side, you either have to predeclare all the variables or remove the type (or specify the type if they are all of the same type). Tuples are not a first class type in this language and this is by design. I've found that tuples are only ever useful as return values from procedures and a named membered record is a much better thing to have (even if it is a little more verbose).\nIn Go, := is called a short variable declaration which will reassign variables that have previously been declared. I personally do not like this approach as it does hidden variable reassignment which is very prone to bugs (which I've had happen to me).\nI hope this clears things up. You can still use := but I would either recommend declaring variables beforehand or rename that new variable."
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "MDU6SXNzdWUyMjMyODAxNjk=",
+            "title": "Make slice out of underlying using array",
+            "createdAt": "2017-04-21T05:26:18Z",
+            "author": null,
+            "labels": {
+              "nodes": [
+                {
+                  "color": "fef2c0",
+                  "name": "feature request"
+                }
+              ]
+            },
+            "bodyText": "Currently for a variable v of type:\nvec3 :: raw_union {\n  using array: [3]f32,\n  using elems: struct { x, y, z: f32 }\n}\nyou can access its elements with v[0], v[1], v[2] just fine, but making a slice as v[..] currently won't work, throwing:\nCannot slice `v`\n\nerror. Explicitly getting v.array[..] works, but it would be nice if slicing could respect using keyword :)",
+            "comments": {
+              "edges": [
+                {
+                  "node": {
+                    "author": {
+                      "login": "gingerBill",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/3338141?v=4"
+                    },
+                    "bodyText": "I'm not sure if I want to support using still on arrays. I added to as an experiment to see what it would be like and for especially the purpose you've made.\nIt may be needed to take using to its logical extreme but I really don't know if that would feel right."
+                  }
+                },
+                {
+                  "node": {
+                    "author": null,
+                    "bodyText": "@gingerBill well, the experiment is surely working, for me at least ;) Except this case..."
+                  }
+                },
+                {
+                  "node": {
+                    "author": null,
+                    "bodyText": "Ok, doing vec3 this way is currently limited in 3 ways for me:\n\nraw_unions are not printable\nYou can't init such type with vec3{} constructor\nActually, due to the way find_using_index_expr works, currently you can remove using tag from the array variable and it'll still work :)\n\nSo yeah, I'd be fine with to_slice :: proc(any_of_my_structs: any) -> []f32 function that'd return [0..<3] or [0..<4] slices depending on the size of my vec3 or vec4 structs I pass, but I don't know how to implement it yet :P"
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "gingerBill",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/3338141?v=4"
+                    },
+                    "bodyText": "Issue 3 has been fixed.\nIssue 2 is a problem because, which variant will you print?\nIssue 1 is because of weird reasons. I may change this soon to be similar to C."
+                  }
+                },
+                {
+                  "node": {
+                    "author": null,
+                    "bodyText": "@gingerBill printing is not crucial given I can always print by accessing elements manually :) But the vec3{} constructor is a problem, I switched to regular structs because my code started to look ugly..."
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "gingerBill",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/3338141?v=4"
+                    },
+                    "bodyText": "@procedural Is there any reason for not using [vector 3]f32? Is it just its alignment that is the issue?"
+                  }
+                },
+                {
+                  "node": {
+                    "author": null,
+                    "bodyText": "I get 2 errors when replacing vec4 :: struct { x, y, z, w: f32 } with vec4 :: [vector 4]f32;:\nFor a versor initialization like v := vec4{w = 1};:\n`field = value` is only allowed in struct literals\n\nFor accessing x, y, z, w without typing the name of a variable each time in a scope:\n`using` can only be applied to variables of type struct or raw_union"
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "gingerBill",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/3338141?v=4"
+                    },
+                    "bodyText": "This is because [vector 4]f32 is not a struct, it's a vector. Vectors are like arrays that have certain rules and operations.\nThe members x y z w are short hand for vectors of length 4 and less. They could be removed because it's just a \"sanity\" feature.\na := [vector 4]f32{1, 2, 3, 4};\nb := [vector 4]f32{1}; // equivalent to `[vector 4]f32{1, 1, 1, 1};\n\nAt the moment, it is not possible to initialise an array with element at certain indices yet. I may add this soon."
+                  }
+                },
+                {
+                  "node": {
+                    "author": null,
+                    "bodyText": "What about using a vector?"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "MDU6SXNzdWUyMjUxMTA5MDk=",
+            "title": "Linux shared libraries require main function and optimize out other unused functions",
+            "createdAt": "2017-04-28T15:13:50Z",
+            "author": null,
+            "labels": {
+              "nodes": [
+                {
+                  "color": "fef2c0",
+                  "name": "feature request"
+                }
+              ]
+            },
+            "bodyText": "Because of this you have to write this craziness:\nhttps://github.com/procedural/gpulib/blob/f6f71e2/gpulib.odin#L926-L1043\n\nmain procedure should not be required for shared libraries\nOdin needs some way to tell that a procedure won't be optimized out (maybe all non _-prefixed functions?)",
+            "comments": {
+              "edges": [
+                {
+                  "node": {
+                    "author": {
+                      "login": "gingerBill",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/3338141?v=4"
+                    },
+                    "bodyText": "Maybe a #required tag may be a good thing.\nAt the moment, any \"entity\" name prefixed with an underscore will be a \"private\" entity that is local to that scope."
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "ThisDrunkDane",
+                      "avatarUrl": "https://avatars2.githubusercontent.com/u/1834353?v=4"
+                    },
+                    "bodyText": "a #required seems pretty necessary for making any library that builds as a dll, as some functions can be purely written to be used by the user and not the library itself. And there is the DllMain (at least on windows) entry point which is optional, so making main :: proc() optional when building as a DLL makes sense."
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "MDU6SXNzdWUyMjUzMjA0NzQ=",
+            "title": "Linux ABI issue (passing structs by value)",
+            "createdAt": "2017-04-30T11:11:02Z",
+            "author": null,
+            "labels": {
+              "nodes": [
+                {
+                  "color": "ee0701",
+                  "name": "bug"
+                },
+                {
+                  "color": "1d76db",
+                  "name": "linux"
+                }
+              ]
+            },
+            "bodyText": "Repro:\nmain.c, compiled with clang -shared -fPIC -o libmyfunc.so main.c\n#include <stdio.h>\n\nstruct vec3 { float x, y, z; };\n\nvoid CFunction(struct vec3 x) {\n  printf(\"Received struct vec3: %f %f %f\\n\", x.x, x.y, x.z);\n}\nmain.odin:\n#foreign_system_library myfunc \"myfunc\";\n\nvec3 :: struct #ordered { x, y, z: f32 }\n\nCFunction :: proc(x: vec3) #foreign myfunc;\n\nmain :: proc() {\n  x: vec3;\n  x.x = 1;\n  x.y = 2;\n  x.z = 3;\n  CFunction(x);\n}\nPrints:\nReceived struct vec3: 1.000000 0.000000 2.000000\n\nI myself like to pass everything by pointer, but I'm currently working with a 3rd party C library that passes structs by value everywhere.",
+            "comments": {
+              "edges": [
+                {
+                  "node": {
+                    "author": null,
+                    "bodyText": "vec4 doesn't work too:\n#include <stdio.h>\n\nstruct vec4 { float x, y, z, w; };\n\nvoid CFunction(struct vec4 x) {\n  printf(\"Received struct vec4: %f %f %f %f\\n\", x.x, x.y, x.z, x.w);\n}\n#foreign_system_library myfunc \"myfunc\";\n\nvec4 :: struct #ordered { x, y, z, w: f32 }\n\nCFunction :: proc(x: vec4) #foreign myfunc;\n\nmain :: proc() {\n  x: vec4;\n  x.x = 1;\n  x.y = 2;\n  x.z = 3;\n  x.w = 4;\n  CFunction(x);\n}\nReceived struct vec4: 1.000000 0.000000 2.000000 0.000000\n\nBut vec8 all of a sudden works:\n#include <stdio.h>\n\nstruct vec8 { float x0, y0, z0, w0,\n                    x1, y1, z1, w1; };\n\nvoid CFunction(struct vec8 x) {\n  printf(\"Received struct vec8: %f %f %f %f %f %f %f %f\\n\", x.x0, x.y0, x.z0, x.w0,\n                                                            x.x1, x.y1, x.z1, x.w1);\n}\n#foreign_system_library myfunc \"myfunc\";\n\nvec8 :: struct #ordered { x0, y0, z0, w0,\n                          x1, y1, z1, w1: f32 }\n\nCFunction :: proc(x: vec8) #foreign myfunc;\n\nmain :: proc() {\n  x: vec8;\n  x.x0 = 1;\n  x.y0 = 2;\n  x.z0 = 3;\n  x.w0 = 4;\n  x.x1 = 5;\n  x.y1 = 6;\n  x.z1 = 7;\n  x.w1 = 8;\n  CFunction(x);\n}\nReceived struct vec8: 1.000000 2.000000 3.000000 4.000000 5.000000 6.000000 7.000000 8.000000"
+                  }
+                },
+                {
+                  "node": {
+                    "author": null,
+                    "bodyText": "vec7 works too..."
+                  }
+                },
+                {
+                  "node": {
+                    "author": null,
+                    "bodyText": "vec6 works too..."
+                  }
+                },
+                {
+                  "node": {
+                    "author": null,
+                    "bodyText": "And vec5 works too. So it means 4 32-bit values and lower cause an issue, maybe it triggers some optimization Odin not aware of somewhere..."
+                  }
+                },
+                {
+                  "node": {
+                    "author": null,
+                    "bodyText": "x86 difference (compiled with -O0 -g flags):\ndiff --git a/incorrect.txt b/correct.txt\nindex f254b47..b4e9251 100644\n--- a/incorrect.txt\n+++ b/correct.txt\n@@ -114,20 +114,19 @@ Disassembly of section .text:\n 0000000000000620 <CFunction>:\n #include <stdio.h>\n \n-struct vec4 { float x0, y0, z0, w0; };\n+struct vec4 { float x0, y0, z0, w0; char a; };\n \n void CFunction(struct vec4 x) {\n  push   rbp\n  mov    rbp,rsp\n  sub    rsp,0x\n+ lea    rax,[rbp+0x]\n  lea    rdi,[rip+0x]\n- movlps QWORD PTR [rbp-0x],xmm0\n- movlps QWORD PTR [rbp-0x],xmm1\n   printf(\"Received struct vec4: %f %f %f %f\\n\", x.x0, x.y0, x.z0, x.w0);\n- cvtss2sd xmm0,DWORD PTR [rbp-0x]\n- cvtss2sd xmm1,DWORD PTR [rbp-0x]\n- cvtss2sd xmm2,DWORD PTR [rbp-0x]\n- cvtss2sd xmm3,DWORD PTR [rbp-0x]\n+ cvtss2sd xmm0,DWORD PTR [rax]\n+ cvtss2sd xmm1,DWORD PTR [rax+0x]\n+ cvtss2sd xmm2,DWORD PTR [rax+0x]\n+ cvtss2sd xmm3,DWORD PTR [rax+0x]\n  mov    al,0x\n  call   500 <printf@plt>\n  mov    DWORD PTR [rbp-0x],eax"
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "ThisDrunkDane",
+                      "avatarUrl": "https://avatars2.githubusercontent.com/u/1834353?v=4"
+                    },
+                    "bodyText": "Might be an ABI issue? I think Odin only obeys windows x64 ABI atm."
+                  }
+                },
+                {
+                  "node": {
+                    "author": null,
+                    "bodyText": "@ThisDrunkDane maybe! Can't test on Windows, don't know how to create a dll with cl, not a Windows programmer... :)"
+                  }
+                },
+                {
+                  "node": {
+                    "author": null,
+                    "bodyText": "Compiling with cl.exe /D_USRDLL /D_WINDLL main.c /MT /link /DLL /OUT:myfunc.dll\n#include <stdio.h>\n\nstruct vec3 { float x, y, z; };\n\n__declspec(dllexport)\nvoid CFunction(struct vec3 x) {\n  printf(\"Received struct vec3: %f %f %f\\n\", x.x, x.y, x.z);\n}\nproduces a dll, but when I try to run the odin file with odin.exe run main.odin\nmyfunc.dll : fatal error LNK1107: invalid or corrupt file: cannot read at 0x2C0"
+                  }
+                },
+                {
+                  "node": {
+                    "author": null,
+                    "bodyText": "λ dumpbin.exe /exports myfunc.dll                              \nMicrosoft (R) COFF/PE Dumper Version 12.00.31101.0             \nCopyright (C) Microsoft Corporation.  All rights reserved.     \n                                                               \n                                                               \nDump of file myfunc.dll                                        \n                                                               \nFile Type: DLL                                                 \n                                                               \n  Section contains the following exports for myfunc.dll        \n                                                               \n    00000000 characteristics                                   \n    5905EDB1 time date stamp Sun Apr 30 16:59:13 2017          \n        0.00 version                                           \n           1 ordinal base                                      \n           1 number of functions                               \n           1 number of names                                   \n                                                               \n    ordinal hint RVA      name                                 \n                                                               \n          1    0 00001000 CFunction                            \n                                                               \n  Summary                                                      \n                                                               \n        4000 .data                                             \n        1000 .pdata                                            \n        7000 .rdata                                            \n        1000 .reloc                                            \n        C000 .text                                             \n                                                               \n\n¯\\_(ツ)_/¯"
+                  }
+                },
+                {
+                  "node": {
+                    "author": null,
+                    "bodyText": "Duh, I should've link to .lib file, not .dll :) Yep, it all works fine on Windows:\nReceived struct vec3: 1.000000 2.000000 3.000000"
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "gingerBill",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/3338141?v=4"
+                    },
+                    "bodyText": "This is an ABI problem on Linux. I do not know what Linux's ABI is. On Windows, I'm using this rule https://github.com/gingerBill/Odin/blob/1430ca30a3a0677fb395d2c5c190e86f02ed2b06/src/check_expr.c#L1060.\nI have yet to figure out what Linux is because I personally am not support Linux."
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "baines",
+                      "avatarUrl": "https://avatars1.githubusercontent.com/u/1444224?v=4"
+                    },
+                    "bodyText": "Linux uses the SystemV ABI, there's a pdf for it here: https://people.freebsd.org/~obrien/amd64-elf-abi.pdf\nIn the Parameter Passing section it describes passing structs. It looks like if the struct >16 bytes it'll always be passed in memory (via a pointer), but otherwise can be put in registers based on the rules on page 16-17."
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "gingerBill",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/3338141?v=4"
+                    },
+                    "bodyText": "Assuming how LLVM IR \"works\", I would assume if the size <= 16, it will be passed by value, else it is passed by pointer. Is this the case even if the size is not a multiple of 2 (like with windows)?"
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "baines",
+                      "avatarUrl": "https://avatars1.githubusercontent.com/u/1444224?v=4"
+                    },
+                    "bodyText": "I'm not certain, but the pdf makes it sound like it's not limited to powers of two."
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "gingerBill",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/3338141?v=4"
+                    },
+                    "bodyText": "If so, I'll just try that and see if this fixes @procedural's problem."
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "MDU6SXNzdWUyMjgzNzE1MjY=",
+            "title": "General Unsolved Issues",
+            "createdAt": "2017-05-12T18:26:38Z",
+            "author": {
+              "login": "gingerBill",
+              "avatarUrl": "https://avatars3.githubusercontent.com/u/3338141?v=4"
+            },
+            "labels": {
+              "nodes": [
+                {
+                  "color": "128A0C",
+                  "name": "help wanted"
+                },
+                {
+                  "color": "cc317c",
+                  "name": "question"
+                }
+              ]
+            },
+            "bodyText": "This is a list of the general unsolved problems that Odin has yet to \"solve\":\nModules\n\nHow should modules/packages/libraries be handled?\nShould it just be based around the file (like at the moment) or should it be based around the directory?\nAre there any good and simple examples that another languages implement?\n\n\"Generics\"\n\nShould Odin have some form of parametric polymorphism for types and procedures?\nWould a form of \"semantic macros\" for code generation be better?\n\nMetaprogramming\n\nHow much metaprogramming should be in the language?\nCompile Time Execution?\nAST Modification?\nCompiler Plugin System?\n\nDebugging\n\nDebug Information generation for the LLVM backend is needed\n\nLanguage Functionality\n\nInline assembly\n\nBackend\n\nCustom SSA\nCustom code generation\nBuilt in linker rather than relying on a third party linker\n\nNote: This list may be appended to.",
+            "comments": {
+              "edges": []
+            }
+          },
+          {
+            "id": "MDU6SXNzdWUyMzY3NTA1NzM=",
+            "title": "Documentation Generation",
+            "createdAt": "2017-06-18T22:46:37Z",
+            "author": {
+              "login": "gingerBill",
+              "avatarUrl": "https://avatars3.githubusercontent.com/u/3338141?v=4"
+            },
+            "labels": {
+              "nodes": [
+                {
+                  "color": "128A0C",
+                  "name": "help wanted"
+                }
+              ]
+            },
+            "bodyText": "I'm currently writing the documentation generation tool for Odin. So if you pass it a file with valid syntax, it will generate the documentation for the file from just its associated comments.\nSo a a procedure declaration with a group of comments above it will be associated with that group of comments.\n// foo_bar does amazing things beyond your wildest dreams\n// It does this by doing magic behind your very eyes\nproc foo_bar(name: string, loc = #caller_location) -> int {\n    return 42;\n}\n\nWhat format would be preferable for documentation?\n\nMarkdown\nHTML\nCustom format\nOther?",
+            "comments": {
+              "edges": [
+                {
+                  "node": {
+                    "author": {
+                      "login": "ratchetfreak",
+                      "avatarUrl": "https://avatars0.githubusercontent.com/u/16795580?v=4"
+                    },
+                    "bodyText": "Is there a way to differentiate doc comments from comments that shouldn't be in docs?"
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "bdoner",
+                      "avatarUrl": "https://avatars1.githubusercontent.com/u/2525536?v=4"
+                    },
+                    "bodyText": "Some languages goes with three slashes for documentation comments and two for regular comments.\nDoing it directly in HTML allow for easy online docs. Though Markdown is better for GitHub project, and will easily convert to HTML if that's needed. So Markdown +1 from here!"
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "gingerBill",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/3338141?v=4"
+                    },
+                    "bodyText": "@ratchetfreak There will not be. I don't personally like this as one of the points of comments is for documentation. Why should there be a completely different way to handle this specific case?\nThey way it will work is that it will grab the leading comment before the declaration and the line comment after the semicolon (for specific declarations).\nSubsequent lines of text will be considered part of the same paragraph (like markdown) so if you want a line break, leave an empty comment to separate paragraphs.\nI want comments in code to be just as documenting as the generated documentation."
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "ThisDrunkDane",
+                      "avatarUrl": "https://avatars2.githubusercontent.com/u/1834353?v=4"
+                    },
+                    "bodyText": "I say +1 for markdown too though will markdown in the comment be stripped or can you embed markdown in your comments?"
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "msmshazan",
+                      "avatarUrl": "https://avatars2.githubusercontent.com/u/20334207?v=4"
+                    },
+                    "bodyText": "Markdown is more sane than HTML or XML or any *ML ...."
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "clankill3r",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/738650?v=4"
+                    },
+                    "bodyText": "Markdown +1\nYou have browser extensions to support markdown in the browser.\nThe one I tested for chrome works (you have to enable for files in options):\nhttps://github.com/simov/markdown-viewer#advanced-options\nIt might be good to make people aware of that. Prior to this day I always looked at md files in simple text editors that don't support the format.\n\n\nAlso please generate links to other files of the documentation.\nFor example, here you can click on String as well to go to the documentation of String:\nhttp://processing.github.io/processing-javadocs/core/processing/core/PApplet.html\n\n\nLike @bdoner said with 3 slashes, java has /** instead of /* for example. I don't really care what it looks like but I think it would be good to have it more specific then just taking the comments above a proc.\n-some IDE's highlight comments for documentation in a different color\n-it makes it easier to search threw documentation\n-what if you're comment is not meant to go in the doc?"
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "ForsakenHarmony",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/8845940?v=4"
+                    },
+                    "bodyText": "Rust's doc gen is pretty good, I think they use markdown as well"
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "yoanlcq",
+                      "avatarUrl": "https://avatars1.githubusercontent.com/u/9999756?v=4"
+                    },
+                    "bodyText": "A bit late to the party, but you might really want to look at how Rust does it.\nJust click the [src] button in any part of the doc to see the actual source, including their documentation comments.\nIt's Markdown, and examples in documentation are automatically tested by the compiler when running cargo test. Also you can insert lints enabling (or disabling) warnings about undocumented items.\nAlso documentation comments (i.e with /// for the next item or //! for the root item) are actually just syntactic sugar for regular metadata attributes (just like #[inline] and friends).\nThere's room for improvement, for instance referencing items such as parameters, types and modules is a bit hackish and not convenient to do. As a result most people (including me) just write them between ticks ('`') to show that it's code, but obviously it's not satisfying.\nAnyway, one should pick a solution which makes it super easy and super fun to write good-looking documentation for anything. XML is certainly not one. Markdown might be, but has its annoyances. Putting everything between ticks gets old fast, and most of the syntax is useless for documentation of code.\nPerhaps a small markup language designed for this purpose could do the trick."
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "MDU6SXNzdWUyNTkwMDYwNzA=",
+            "title": "Different results when casting a u32 constant and a u32 variable holding the same value to f32",
+            "createdAt": "2017-09-20T00:41:38Z",
+            "author": {
+              "login": "vassvik",
+              "avatarUrl": "https://avatars1.githubusercontent.com/u/2770871?v=4"
+            },
+            "labels": {
+              "nodes": [
+                {
+                  "color": "ee0701",
+                  "name": "bug"
+                }
+              ]
+            },
+            "bodyText": "The following snippet:\nimport \"core:fmt.odin\";\n\nmain :: proc() {\n    // R :: 268435448; // incorrect\n    // R :: 300000000; // correct\n    R :: 4294967195; // incorrect\n    r := u32(R);\n    fmt.println(r == u32(R));\n    fmt.println(f32(r) == f32(R));\n}\nwill output\ntrue\nfalse\n\nIt does not seem to be only large values, as you can find in-between values where it works as expected.\nIt seems to be related to floating point rounding:\n    R :: 4294967195; // breaks\n    r := u32(R);\n    f1 := f32(r);\n    f2 := f32(R);\n    fmt.printf(\"%.3f %.3f\\n\", f1, f2);\nwhich will output:\n294967296.000 4294967040.000\n\nwhich seems to indicate that the former rounds up, while the latter rounds down.",
+            "comments": {
+              "edges": []
+            }
+          },
+          {
+            "id": "MDU6SXNzdWUyNjE4MDQwNzI=",
+            "title": "Passing `any`s between host/library bounds",
+            "createdAt": "2017-09-30T00:44:39Z",
+            "author": {
+              "login": "zangent",
+              "avatarUrl": "https://avatars0.githubusercontent.com/u/13626644?v=4"
+            },
+            "labels": {
+              "nodes": [
+                {
+                  "color": "fef2c0",
+                  "name": "feature request"
+                }
+              ]
+            },
+            "bodyText": "When an Odin program passes an any to a library (also written in Odin), that any is unusable.\nMy guess is that this happens because the Type_Info contained within the any is a pointer to a value in the host application, whereas the Library is comparing that pointer to its pointers.\n\nThis is a difficult problem, but I believe I have an idea how to fix it.\nThe proposal is to include an array of type hashes, and when an any or union is received in an #export proc or when it's returned from a #foreign or dynamically loaded proc, it should search the hash table and remap the type_info if possible.\nIt's not a great solution, but this is a hard problem to solve.",
+            "comments": {
+              "edges": [
+                {
+                  "node": {
+                    "author": {
+                      "login": "bpunsky",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/6934863?v=4"
+                    },
+                    "bodyText": "I think all that really needs to be done to solve this is to determine type equivalency via a hash rather than by pointer. Rather than type_info_of(string) == any_value.type_info, type_hash_of(string) == any_value.type_info.hash.\nIf match and type assertions used this, you should be able to pass any and union into a DLL and have things still work.\nThe hash would have to be unique, obviously, and consistently the same for the same type. This could mean hashing the file path and type name, or like @zangent suggested on Discord, hashing the type name and all the fields."
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "bpunsky",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/6934863?v=4"
+                    },
+                    "bodyText": "I also think this is useful for more than just passing anys into a dynamic library. It also allows you to serialize types - you can pass a type around, in a saved file, across the network, between processes, etc. This would be a no-go with the current system of using pointers, obviously. An even bigger problem - any won't work across static library boundaries either."
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "gingerBill",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/3338141?v=4"
+                    },
+                    "bodyText": "This issue entirely depends on iff any type containing ^Type_Info should be passed across library boundaries at all. I would personally prefer if the vast majority of Odin applications were statically built (or self contained).\nThis might mean that unions cannot store a ^Type_Info but just an integer specifying which type it is (like it was previously). Getting the ^Type_Info should not be difficult but it would not be a simple data access."
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "gingerBill",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/3338141?v=4"
+                    },
+                    "bodyText": "For union I have now made it so that the variant type is stored as an integer rather than storing the type information. This will allow for a union to be passed across a library boundary if needed."
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "bpunsky",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/6934863?v=4"
+                    },
+                    "bodyText": "This is an interesting fix. Too bad it won't work for any. Is there currently a way to get the ^Type_Info from union types?\nAlso, working with static/dynamic libraries is just one of the upsides of the hash fix. It affords a lot of flexibility with (de)serialization, passing info between processes or over the wire, and probably a bunch of things I haven't even thought of. Personally, to me, it also feels more correct in that comparing the pointers feels sort of hacky, although it works just fine in a limited set of circumstances.\nEven with your own libraries/packages, you still would need to change the way type equivalency is determined to avoid this problem, unless no precompiled code is used."
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "bpunsky",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/6934863?v=4"
+                    },
+                    "bodyText": "I think hashing the type name (and packing etc) and the type name and identifier of every field would be a perfect fix. It would allow the exact same type in different files to be equivalent, but since it's exactly the same right down to the name, I don't see the harm. It would also be at compile time, so performance isn't a non-issue but it's not a bloated feature either.\nFoo :: struct #packed #align 16 {\n    x, y, z: f32,\n    name: string,\n}\n\nrough pseudocode to hash Foo:\nhs := FNV64_State{};\n\nhash.fnv64_partial(&hs, \"Foo\");\nhash.fnv64_partial(&hs, \"struct #packed #align 16\");\nhash.fnv64_partial(&hs, \"x\");\nhash.fnv64_partial(&hs, \"f32\");\nhash.fnv64_partial(&hs, \"y\");\nhash.fnv64_partial(&hs, \"f32\");\nhash.fnv64_partial(&hs, \"z\");\nhash.fnv64_partial(&hs, \"f32\");\nhash.fnv64_partial(&hs, \"name\");\nhash.fnv64_partial(&hs, \"string\");\n\nfinal := hs.result;\n\nThere's probably a better way to do it, but it's at least possible this way."
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "Tetralux",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/1348560?v=4"
+                    },
+                    "bodyText": "​@bpunsky\nComparing pointers is fast and simple, not hacky. Where'd you get that from?"
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "gingerBill",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/3338141?v=4"
+                    },
+                    "bodyText": "@bpunsky The type information for the union's variants can be in the type information of the union. See fmt.odin for more examples.\nBut as @h-225 has said, comparing pointers is not hacky. It's the correct way since a different pointer will refer to a distinct type.\nMy_Int :: int;\nassert(My_Int != int);\nassert(type_info_of(My_Int) != type_info_of(int));"
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "gingerBill",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/3338141?v=4"
+                    },
+                    "bodyText": "I should also note, that hashing a \"type\" is not as easy as you may think. I have recently added most of the functionality in types.odin so you can manually compare to see if two ^Type_Info are identical (are_types_identical). This procedure is very very similar to how it is done in the compiler."
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "bpunsky",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/6934863?v=4"
+                    },
+                    "bodyText": "The biggest problem I see is the recursion. That could make the hashing costly at compile time for complex types. However, once the hash is done, that could be used to compare types instead of whatever the compiler equivalent of types.are_types_identical is, which could end up being a net win for performance."
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "Tetralux",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/1348560?v=4"
+                    },
+                    "bodyText": "All you'll actually do by using hashes is to require more processing power to compute whether two types are the same.\nIn both cases, it comes down to two values that are either the same or they aren't. Pointers in one case, (which won't change throughout the life of a program) and integers in the other (that won't change unless the structure of the type is changed -- which would also break across DLL boundaries.)\nEdit: i.e: if you change the type structure, the old type would not be considered equal to the old type and anys that had the old type would no longer be valid.\nPlus, if Odin ever gets sufficiently advanced CTFE, types may change structure during compilation anyway if you were able to add/remove fields programmatically, so you wouldn't necessarily be able to rely on their equality remaining constant before runtime.\nHaving that complication simply isn't necessary. KISS."
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "Tetralux",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/1348560?v=4"
+                    },
+                    "bodyText": "Whoops! Posted it before I was done writing! 😛"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "MDU6SXNzdWUyNjU1ODUwNzQ=",
+            "title": "Another issue with nested struct initialization",
+            "createdAt": "2017-10-15T16:37:09Z",
+            "author": {
+              "login": "brokenbeta",
+              "avatarUrl": "https://avatars3.githubusercontent.com/u/3834867?v=4"
+            },
+            "labels": {
+              "nodes": [
+                {
+                  "color": "ee0701",
+                  "name": "bug"
+                }
+              ]
+            },
+            "bodyText": "The issue is that the number 32 does not make it into the struct, which trips the assert.\nimport \"core:fmt.odin\"\n\nAttributes :: struct\n{\n    colour: u32,\n    number: int\n}\n\nThing :: struct\n{\n    char: u8,\n    attributes: Attributes\n}\n\nmain :: proc()\n{\n    attributes := Attributes { 0x0, 0 };\n\n    rtc := Thing { 32, attributes };\n    assert(rtc.char == 32);\n}",
+            "comments": {
+              "edges": [
+                {
+                  "node": {
+                    "author": {
+                      "login": "gingerBill",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/3338141?v=4"
+                    },
+                    "bodyText": "This bug is absolutely weird. The LLVM code should initialize it with constant values:\nstore %demo-0.Thing {%demo-0.Attributes zeroinitializer, i8 32}, %demo-0.Thing* %2\nHowever, it doesn't seem to store it the char parameter."
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "MDU6SXNzdWUyNzMxNjkyNzM=",
+            "title": "Checking length of args array causing `new_c_string` on an arg to crash",
+            "createdAt": "2017-11-11T19:21:30Z",
+            "author": {
+              "login": "zangent",
+              "avatarUrl": "https://avatars0.githubusercontent.com/u/13626644?v=4"
+            },
+            "labels": {
+              "nodes": [
+                {
+                  "color": "ee0701",
+                  "name": "bug"
+                }
+              ]
+            },
+            "bodyText": "Yeah... that's the worst description ever.\nAnyway, this code segfaults on macOS when the SEGFAULT AREA is uncommented.\nimport \"core:os.odin\"\nimport \"core:fmt.odin\"\nimport \"core:strings.odin\"\n\nmain :: proc() {\n\n// START SEGFAULT AREA\n\tif(len(os.args) != 4 || os.args[3] != \"__GEN_BIND_SH\") {\n\n\t\tfmt.println(\"Please run this from the script 'generate_bindings.sh' - do not run this directly!\");\n\t\tos.exit(1);\n\t}\n// END SEGFAULT AREA\n\n\tfmt.println(os.args[1]);\n\tfmt.println(strings.new_c_string(os.args[1]));\n\tfmt.println(\"Done\");\n}\nHere's an LLDB stack trace of the program\n(lldb) target create \"binding_generator/main\"\nCurrent executable set to 'binding_generator/main' (x86_64).\n(lldb) settings set -- target.run-args  \"api.json\" \"gdnative_api.json\" \"__GEN_BIND_SH\"\n(lldb) s\nerror: invalid process\n(lldb) r\nProcess 88864 launched: '/Users/zachary/Programming/godot-odin/binding_generator/main' (x86_64)\napi.json\nProcess 88864 stopped\n* thread #1, queue = 'com.apple.main-thread', stop reason = EXC_BAD_ACCESS (code=1, address=0x3)\n    frame #0: 0x0000000000000003\nerror: memory read failed for 0x0\nTarget 0: (main) stopped.\n(lldb) bt\n* thread #1, queue = 'com.apple.main-thread', stop reason = EXC_BAD_ACCESS (code=1, address=0x3)\n  * frame #0: 0x0000000000000003\n    frame #1: 0x00000000000029cc main`alloc + 236\n    frame #2: 0x0000000000018691 main`strings-7.new_c_string + 305\n    frame #3: 0x000000000000879a main`main-0.main + 874\n    frame #4: 0x000000000001d318 main`main + 24\n    frame #5: 0x00007fffd657d235 libdyld.dylib`start + 1\n(lldb)",
+            "comments": {
+              "edges": [
+                {
+                  "node": {
+                    "author": {
+                      "login": "zangent",
+                      "avatarUrl": "https://avatars0.githubusercontent.com/u/13626644?v=4"
+                    },
+                    "bodyText": "I've determined that the issue lies in the context system - if I add a fmt.println(context.allocator) at the start of alloc in _preload.odin, here's what gets printed out when the first if is there: Allocator{procedure = proc(rawptr, Allocator_Mode, int, int, rawptr, int, u64, Source_Code_Location) -> rawptr @ 0x0, data = 0x0}\nCompare that to Allocator{procedure = proc(rawptr, Allocator_Mode, int, int, rawptr, int, u64, Source_Code_Location) -> rawptr @ 0x2540, data = 0x0}\nFor some reason the function pointer is not set...\nIf it's helpful, here's the two .ll files\nworking.ll\nbroken.ll"
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "gingerBill",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/3338141?v=4"
+                    },
+                    "bodyText": "I think the remedy to this is make sure that a context always in a valid state. I wonder if this is caused by something in main being set correctly."
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "MDU6SXNzdWUyNzYyNzg5MjE=",
+            "title": "Allow overloading of procedures in different scopes (e.g: `len`, `reserve`, `append`)",
+            "createdAt": "2017-11-23T06:53:29Z",
+            "author": {
+              "login": "Tetralux",
+              "avatarUrl": "https://avatars3.githubusercontent.com/u/1348560?v=4"
+            },
+            "labels": {
+              "nodes": [
+                {
+                  "color": "663fba",
+                  "name": "discussion"
+                }
+              ]
+            },
+            "bodyText": "Ref gingerBill#148.\nA.odin:\nS1 :: struct {}\nlen :: proc(s: S1) -> int {\n        // Determine length of an S1...\n        return 1;\n}\nB.odin:\nS2 :: struct {}\nlen :: proc(s: S2) -> int {\n        // Determine length of an S2...\n        return 2;\n}\nmain.odin:\nusing import \"A.odin\";\nusing import \"B.odin\";\n\nmain :: proc() {\n\ts1: S1;\n\ts2: S2;\n\ta := make([]int, 3);\n\n\ti := A.len(s1);\n\tj := B.len(s2);\n\tk := len(a); // Error\n\t// What benefit do these qualifications grant you\n\t// that is better than having them be overloads?\n\t// i.e:\n\t// i := len(s1);\n\t// j := len(s2);\n        // k := len(a);\n\n\tassert(i == 1);\n\tassert(j == 2);\n\tassert(k == 3);\n}",
+            "comments": {
+              "edges": [
+                {
+                  "node": {
+                    "author": {
+                      "login": "gingerBill",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/3338141?v=4"
+                    },
+                    "bodyText": "Overloading and scopes don't mix well. This is why I have restricting overloading to a single \"level\". In languages such as C++, functions can only be defined at the global scope and thus, overloading only works there. However, Odin has many different forces of scopes: universal, global, file, procedure, etc and because of this, procedures can be nested within other procedures.\nThis was one of the main reasons as to why I didn't want procedure overloading in the first place as it does work well in a language such as Odin.\nI recommend that you name the procedure specifically for their use cases rather than use len for everything."
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "MDU6SXNzdWUyNzY5MTIyNDM=",
+            "title": "Shadowing a variable gives no warning",
+            "createdAt": "2017-11-27T06:20:08Z",
+            "author": {
+              "login": "Tetralux",
+              "avatarUrl": "https://avatars3.githubusercontent.com/u/1348560?v=4"
+            },
+            "labels": {
+              "nodes": [
+                {
+                  "color": "663fba",
+                  "name": "discussion"
+                }
+              ]
+            },
+            "bodyText": "It took me a while to realise my mistake; it boiled down to this:\nmain :: proc() {\n    x := 1;\n    for i in 1..5 {\n        x := x + 1; // Shadows the outer `x`\n    }\n    assert(x == 5);\n}\nP.S: Damn copy-pasta... >)",
+            "comments": {
+              "edges": [
+                {
+                  "node": {
+                    "author": {
+                      "login": "gingerBill",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/3338141?v=4"
+                    },
+                    "bodyText": "This isn't necessary a bad thing nor an error. It could be argued that you should name your variables better but that's not for me to decide.\nAs an end goal, I personally want little to no warnings in the compiler and just have errors."
+                  }
+                },
+                {
+                  "node": {
+                    "author": {
+                      "login": "Tetralux",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/1348560?v=4"
+                    },
+                    "bodyText": "Variable names aren't relevant - this was small reproduction of the problem to demonstrate the issue clearly and is not the verbatim code I was working on when I encountered the problem, so I'll ignore that.\nIn the original code, I copied the declaration of a variable to the several locations throughout its enclosing procedure, where it was to be mutated, and then forgot to change them into reassigments.\n\nThis isn't necessary a bad thing nor an error.\n\nCare to name a few examples? :p\nI'll also note that this need not be the default behaviour of the compiler; could have a switch that you can give the compiler if you want it to catch these sorts of things if you don't want to emit even this sort of warning.\nI do however, generally agree that the fewer warnings a compiler issues, the better. :)"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "MDU6SXNzdWUyODEwNTczMzk=",
+            "title": "Assertion in malloc.c failed.",
+            "createdAt": "2017-12-11T15:27:22Z",
+            "author": {
+              "login": "lonjil",
+              "avatarUrl": "https://avatars3.githubusercontent.com/u/885070?v=4"
+            },
+            "labels": {
+              "nodes": []
+            },
+            "bodyText": "mwe.odin:\nSymbol :: struct {\n\tname: string,\n\tvalue: Element,\n}\nCons :: struct {\n\tcar, cdr: Element,\n}\nElement :: union {\n\tint,\n\t^Symbol,\n\t^Cons,\n}\nmain :: proc() {\n\tsymb := new(int); // can be any type\n\tcons := new(Cons);\n\tnums := new(int); // can be any type\n}\nThe above produces this output:\nmwe: malloc.c:2427: sysmalloc: Assertion `(old_top == initial_top (av) && old_size == 0) || ((unsigned long) (old_size) >= MINSIZE && prev_inuse (old_top) && ((unsigned long) old_end & (pagesize - 1)) == 0)' failed.\nAborted\n\nOn Linux. Bill said this might be an LLVM issue.",
+            "comments": {
+              "edges": [
+                {
+                  "node": {
+                    "author": {
+                      "login": "gingerBill",
+                      "avatarUrl": "https://avatars3.githubusercontent.com/u/3338141?v=4"
+                    },
+                    "bodyText": "Actually... I might know what the issue is and what I need to fix it. A fix will happen when the explicit-overloading branch is merged"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "MDU6SXNzdWUyODUzMzAwNzQ=",
+            "title": "Possible bug with append return value when used directly when indexing",
+            "createdAt": "2018-01-01T21:23:28Z",
+            "author": {
+              "login": "vassvik",
+              "avatarUrl": "https://avatars1.githubusercontent.com/u/2770871?v=4"
+            },
+            "labels": {
+              "nodes": []
+            },
+            "bodyText": "Minimal reproduction:\nmain :: proc() {\n\tarr: [dynamic]int;\n\n\twhen false {\n\t\t// Index 0 is out of bounds range 0..0\n\t\ti := arr[append(&arr, 0)-1];\n\t} else {\n\t\tn := append(&arr, 0);\n\t\ti := arr[n-1];\n\t}\n}",
+            "comments": {
+              "edges": []
+            }
+          },
+          {
+            "id": "MDU6SXNzdWUyOTIyNTgzODg=",
+            "title": "fmt.printf width for %d bug",
+            "createdAt": "2018-01-29T01:13:40Z",
+            "author": {
+              "login": "ThisDrunkDane",
+              "avatarUrl": "https://avatars2.githubusercontent.com/u/1834353?v=4"
+            },
+            "labels": {
+              "nodes": [
+                {
+                  "color": "ee0701",
+                  "name": "bug"
+                }
+              ]
+            },
+            "bodyText": "import \"core:fmt.odin\";\n\nmain :: proc() {\n    fmt.printf(\"%2d-%2d-%2d %2d:%2d\\n\", 1, 2, 3 ,4, 5);\n}\n\noutput:\n01-02-03 %!2(int=4)d:%!2(int=5)d",
+            "comments": {
+              "edges": []
+            }
+          }
+        ]
+      }
+    }
+  }
+}

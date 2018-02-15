@@ -6,7 +6,7 @@
  *  @Creation: 28-11-2017 00:10:03 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 07-02-2018 12:20:35 UTC-5
+ *  @Last Time: 14-02-2018 19:57:23 UTC-5
  *  
  *  @Description:
  *  
@@ -20,7 +20,8 @@ import "core:strconv.odin"
 import "core:utf8.odin"
 import "core:utf16.odin"
 
-import pat "shared:path.odin"
+// @note(bpunsky): https://github.com/bpunsky/odin-path
+import pat "shared:odin-path/path.odin"
 
 
 
