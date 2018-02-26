@@ -4,3 +4,9 @@
 *.sublime-workspace
 
 *.pdb
+
+*.ll
+
+*.obj
+
+*.bc

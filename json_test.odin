@@ -6,7 +6,7 @@
  *  @Creation: 31-01-2018 00:26:30 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 14-02-2018 20:49:49 UTC-5
+ *  @Last Time: 26-02-2018 14:04:52 UTC-5
  *  
  *  @Description:
  *  
@@ -15,7 +15,7 @@
 import "core:fmt.odin"
 import "core:os.odin"
 
-import "tempo.odin"
+import "shared:odin-time/time.odin"
 
 using import _ "json.odin"
 
@@ -121,10 +121,10 @@ Message :: struct {
 
 test4 :: proc() {
     fmt.println("started...");
-    timer := tempo.make_timer();
+    timer := time.make_timer();
     
     if obj, ok := parse_file("test_files/jeopardy.json"); ok {
-        fmt.printf("done... (%f sec)\n\n", tempo.seconds(tempo.query(&timer)));
+        fmt.printf("done... (%f sec)\n\n", time.seconds(time.query(&timer)));
         
         messages := make([dynamic]Message, 0, 300_000);
 
@@ -171,10 +171,10 @@ tree_print :: proc(value : Value, indent := 0) {
 
 test5 :: proc() {
     fmt.println("started...");
-    timer := tempo.make_timer();
+    timer := time.make_timer();
 
     if root, ok := parse_file("test_files/twitch.json"); ok {
-        fmt.printf("done... (%f sec)\n\n", tempo.seconds(tempo.query(&timer)));
+        fmt.printf("done... (%f sec)\n\n", time.seconds(time.query(&timer)));
         tree_print(root);
     } else {
         fmt.println("Parsing failed.");
@@ -210,6 +210,8 @@ test7 :: proc() {
 profile :: proc() {
     FILE :: "test_files/jeopardy.json";
 
+    // fmt.println("starting...");
+
     if bytes, ok := os.read_entire_file(FILE); ok {
         parser := Parser{
             spec     = Spec.JSON,
@@ -217,30 +219,30 @@ profile :: proc() {
             source   = string(bytes),
         };
 
-        timer := tempo.make_timer();
+        timer := time.make_timer();
         
         parser.tokens = lex(string(bytes), FILE);
 
-        lex_time := tempo.query(&timer);
-        tempo.start(&timer);
+        lex_time := time.query(&timer);
+        time.start(&timer);
 
         if _, ok := parse(&parser); ok {
-            parse_time := tempo.query(&timer);
+            parse_time := time.query(&timer);
 
             num_tokens := len(parser.tokens);
             
             fmt.printf("lexer:  %d tokens in %f ms, %f ms/token, %f tokens/ms\n",
                 len(parser.tokens),
-                tempo.ms(lex_time),
-                tempo.ms(lex_time)/f64(num_tokens),
-                f64(num_tokens)/tempo.ms(lex_time),
+                time.ms(lex_time),
+                time.ms(lex_time)/f64(num_tokens),
+                f64(num_tokens)/time.ms(lex_time),
             );
 
             fmt.printf("parser: %d tokens in %f ms, %f ms/token, %f tokens/ms\n",
                 num_tokens,
-                tempo.ms(parse_time),
-                tempo.ms(parse_time)/f64(num_tokens),
-                f64(num_tokens)/tempo.ms(parse_time),
+                time.ms(parse_time),
+                time.ms(parse_time)/f64(num_tokens),
+                f64(num_tokens)/time.ms(parse_time),
             );
         }
     }

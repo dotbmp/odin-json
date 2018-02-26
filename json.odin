@@ -6,7 +6,7 @@
  *  @Creation: 28-11-2017 00:10:03 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 14-02-2018 20:27:15 UTC-5
+ *  @Last Time: 24-02-2018 20:07:40 UTC-5
  *  
  *  @Description:
  *  
@@ -418,7 +418,7 @@ lex :: proc(text : string, filename := "") -> []Token {
     }
 
     if errors > 0 { // @note(bpunsky): triggers when opt > 0
-        fmt.printf_err("%d errors", errors);
+        fmt.printf_err("%d errors\n", errors);
         free(tokens);
         panic(); // @fix(bpunsky)
         return nil;
