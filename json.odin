@@ -6,22 +6,24 @@
  *  @Creation: 28-11-2017 00:10:03 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 24-02-2018 20:07:40 UTC-5
+ *  @Last Time: 11-08-2018 12:39:46 UTC-5
  *  
  *  @Description:
  *  
  */
 
-import "core:fmt.odin"
-import "core:mem.odin"
-import "core:os.odin"
-import "core:raw.odin"
-import "core:strconv.odin"
-import "core:utf8.odin"
-import "core:utf16.odin"
+package json
 
-// @note(bpunsky): https://github.com/bpunsky/odin-path
-import pat "shared:odin-path/path.odin"
+using import "core:runtime"
+
+import "core:fmt"
+import "core:mem"
+import "core:os"
+import "core:strconv"
+import "core:unicode/utf8"
+import "core:unicode/utf16"
+
+import pat "bp:path"
 
 
 
@@ -30,18 +32,18 @@ import pat "shared:odin-path/path.odin"
 // GENERAL
 ////////////////////////////
 
-error :: proc(format : string, args : ...any) {
-    message := fmt.aprintf(format, ...args);
-    defer free(message);
+error :: proc(format : string, args : ..any) {
+    message := fmt.aprintf(format, ..args);
+    defer delete(message);
 
     fmt.printf_err("Error: %s\n", message);
 }
 
 escape_string :: proc(str: string) -> string {
-    buf := fmt.String_Buffer{};
+    buf : fmt.String_Buffer;
 
     for i := 0; i < len(str); {
-        char, skip := utf8.decode_rune(cast([]u8) str[i..]);
+        char, skip := utf8.decode_rune(cast([]u8) str[i:]);
         i += skip;
 
         switch char {
@@ -69,10 +71,10 @@ escape_string :: proc(str: string) -> string {
 }
 
 unescape_string :: proc(str: string) -> string {
-    buf := fmt.String_Buffer{};
+    buf : fmt.String_Buffer;
 
     for i := 0; i < len(str); {
-        char, skip := utf8.decode_rune(cast([]u8) str[i..]);
+        char, skip := utf8.decode_rune(cast([]u8) str[i:]);
         i += skip;
 
         switch char {
@@ -81,7 +83,7 @@ unescape_string :: proc(str: string) -> string {
         case '"': // @note: do nothing.
 
         case '\\':
-            char, skip = utf8.decode_rune(cast([]u8) str[i..]);
+            char, skip = utf8.decode_rune(([]u8)(str[i:]));
             i += skip;
 
             switch char {
@@ -101,24 +103,24 @@ unescape_string :: proc(str: string) -> string {
                 lo, hi: rune;
                 hex := [?]u8{'0', 'x', '0', '0', '0', '0'};
 
-                c0, s0 := utf8.decode_rune(cast([]u8) str[i..]); hex[2] = cast(u8) c0; i += s0;
-                c1, s1 := utf8.decode_rune(cast([]u8) str[i..]); hex[3] = cast(u8) c1; i += s1;
-                c2, s2 := utf8.decode_rune(cast([]u8) str[i..]); hex[4] = cast(u8) c2; i += s2;
-                c3, s3 := utf8.decode_rune(cast([]u8) str[i..]); hex[5] = cast(u8) c3; i += s3;
+                c0, s0 := utf8.decode_rune(([]u8)(str[i:]));  hex[2] = (u8)(c0);  i += s0;
+                c1, s1 := utf8.decode_rune(([]u8)(str[i:]));  hex[3] = (u8)(c1);  i += s1;
+                c2, s2 := utf8.decode_rune(([]u8)(str[i:]));  hex[4] = (u8)(c2);  i += s2;
+                c3, s3 := utf8.decode_rune(([]u8)(str[i:]));  hex[5] = (u8)(c3);  i += s3;
 
-                lo = cast(rune) strconv.parse_int(cast(string) hex[..]);
+                lo = rune(strconv.parse_int(string(hex[:])));
 
                 if utf16.is_surrogate(lo) {
-                    c0, s0 := utf8.decode_rune(cast([]u8) str[i..]); i += s0;
-                    c1, s1 := utf8.decode_rune(cast([]u8) str[i..]); i += s1;
+                    c0, s0 := utf8.decode_rune(([]u8)(str[i:]));  i += s0;
+                    c1, s1 := utf8.decode_rune(([]u8)(str[i:]));  i += s1;
 
                     if c0 == '\\' && c1 == 'u' {
-                        c0, s0 = utf8.decode_rune(cast([]u8) str[i..]); hex[2] = cast(u8) c0; i += s0;
-                        c1, s1 = utf8.decode_rune(cast([]u8) str[i..]); hex[3] = cast(u8) c1; i += s1;
-                        c2, s2 = utf8.decode_rune(cast([]u8) str[i..]); hex[4] = cast(u8) c2; i += s2;
-                        c3, s3 = utf8.decode_rune(cast([]u8) str[i..]); hex[5] = cast(u8) c3; i += s3;                      
+                        c0, s0 = utf8.decode_rune(([]u8)(str[i:]));  hex[2] = (u8)(c0);  i += s0;
+                        c1, s1 = utf8.decode_rune(([]u8)(str[i:]));  hex[3] = (u8)(c1);  i += s1;
+                        c2, s2 = utf8.decode_rune(([]u8)(str[i:]));  hex[4] = (u8)(c2);  i += s2;
+                        c3, s3 = utf8.decode_rune(([]u8)(str[i:]));  hex[5] = (u8)(c3);  i += s3;                      
 
-                        hi = cast(rune) strconv.parse_u64(string(hex[..]));
+                        hi = rune(strconv.parse_u64(string(hex[:])));
                         lo = utf16.decode_surrogate_pair(lo, hi);
 
                         if lo == utf16.REPLACEMENT_CHAR {
@@ -212,13 +214,13 @@ destroy :: proc(value : Value) {
     switch v in value.value {
     case Object:
         for _, val in v do destroy(val);
-        free(cast(map[string]Value) v);
+        delete(cast(map[string]Value) v);
 
     case Array:
         for val in v do destroy(val);
-        free(cast([dynamic]Value) v);
+        delete(cast([dynamic]Value) v);
 
-    case String: free(cast(string) v);
+    case String: delete(cast(string) v);
     }
 }
 
@@ -241,9 +243,9 @@ Lexer :: struct {
     errors : int,
 }
 
-lex_error :: inline proc(using lexer : ^Lexer, format : string, args : ...any, loc := #caller_location) {
-    message := fmt.aprintf(format, ...args);
-    defer free(message);
+lex_error :: inline proc(using lexer : ^Lexer, format : string, args : ..any, loc := #caller_location) {
+    message := fmt.aprintf(format, ..args);
+    defer delete(message);
 
     fmt.printf_err("%s(%d,%d) Lexing error: %s\n", path, lines, chars, message);
 
@@ -259,7 +261,7 @@ next_char :: inline proc"contextless"(using lexer : ^Lexer) -> rune {
 
 peek_char :: inline proc"contextless"(using lexer : ^Lexer) -> rune {
     if index < len(source) {
-        #no_bounds_check if char, skip = utf8.decode_rune(cast([]u8) source[index..]); skip > 0 {
+        #no_bounds_check if char, skip = utf8.decode_rune(cast([]u8) source[index:]); skip > 0 {
             return char;
         }
     }
@@ -309,21 +311,21 @@ lex :: proc(text : string, filename := "") -> []Token {
         bookmark := cursor;
 
         switch char {
-        case 'A'...'Z', 'a'...'z', '_':
+        case 'A'..'Z', 'a'..'z', '_':
             kind = Kind.Symbol;
 
             for {
                 switch next_char(&lexer) {
-                case 'A'...'Z': fallthrough;
-                case 'a'...'z': fallthrough;
-                case '0'...'9': fallthrough;
+                case 'A'..'Z': fallthrough;
+                case 'a'..'z': fallthrough;
+                case '0'..'9': fallthrough;
                 case  '_':      continue;
                 }
 
                 break;
             }
 
-            #no_bounds_check switch source[bookmark.index..lexer.index] {
+            #no_bounds_check switch source[bookmark.index:lexer.index] {
             case "null":  kind = Kind.Null;
             case "true":  kind = Kind.True;
             case "false": kind = Kind.False;
@@ -331,17 +333,17 @@ lex :: proc(text : string, filename := "") -> []Token {
 
         case '+', '-':
             switch next_char(&lexer) {
-            case '0'...'9': // continue
+            case '0'..'9': // continue
             case:           
             }
             fallthrough;
 
-        case '0'...'9':
+        case '0'..'9':
             kind = Kind.Integer;
 
             for {
                 switch next_char(&lexer) {
-                case '0'...'9': continue;
+                case '0'..'9': continue;
                 case '.':
                     if kind == Kind.Float {
                         lex_error(&lexer, "Double radix in float");
@@ -414,19 +416,19 @@ lex :: proc(text : string, filename := "") -> []Token {
             next_char(&lexer);
         }
 
-        #no_bounds_check append(&tokens, Token{bookmark, kind, source[bookmark.index..lexer.index]});
+        #no_bounds_check append(&tokens, Token{bookmark, kind, source[bookmark.index:lexer.index]});
     }
 
     if errors > 0 { // @note(bpunsky): triggers when opt > 0
         fmt.printf_err("%d errors\n", errors);
-        free(tokens);
+        delete(tokens);
         panic(); // @fix(bpunsky)
         return nil;
     }
 
     append(&tokens, Token{cursor, Kind.End, ""});
 
-    return tokens[..];
+    return tokens[:];
 }
 
 
@@ -448,9 +450,9 @@ Parser :: struct {
     errors : int,
 }
 
-parse_error :: proc(using parser : ^Parser, message : string, args : ...any, loc := #caller_location) {
-    msg := fmt.aprintf(message, ...args);
-    defer free(msg);
+parse_error :: proc(using parser : ^Parser, message : string, args : ..any, loc := #caller_location) {
+    msg := fmt.aprintf(message, ..args);
+    defer delete(msg);
 
     if index < len(tokens) {
         token := tokens[index];
@@ -462,7 +464,7 @@ parse_error :: proc(using parser : ^Parser, message : string, args : ...any, loc
     errors += 1;
 }
 
-allow :: proc(using parser : ^Parser, kinds : ...Kind) -> ^Token {
+allow :: proc(using parser : ^Parser, kinds : ..Kind) -> ^Token {
     if index >= len(tokens) do return nil;
 
     token := &tokens[index];
@@ -477,8 +479,8 @@ allow :: proc(using parser : ^Parser, kinds : ...Kind) -> ^Token {
     return nil;
 }
 
-expect :: proc(using parser : ^Parser, kinds : ...Kind, loc := #caller_location) -> ^Token {
-    token := allow(parser, ...kinds);
+expect :: proc(using parser : ^Parser, kinds : ..Kind, loc := #caller_location) -> ^Token {
+    token := allow(parser, ..kinds);
 
     if token == nil {
         if index >= len(tokens) {
@@ -491,8 +493,8 @@ expect :: proc(using parser : ^Parser, kinds : ...Kind, loc := #caller_location)
     return token;
 }
 
-skip :: proc(using parser : ^Parser, kinds : ...Kind) {
-    for token := allow(parser, ...kinds); token != nil; token = allow(parser, ...kinds) {
+skip :: proc(using parser : ^Parser, kinds : ..Kind) {
+    for token := allow(parser, ..kinds); token != nil; token = allow(parser, ..kinds) {
         // continue
     }
 }
@@ -596,7 +598,7 @@ buffer_print :: proc(buf: ^fmt.String_Buffer, value: Value, spec := Spec.JSON, i
         
         i := 0;
         for key, value in v {
-            for _ in 0...indent do fmt.sbprint(buf, "    ");
+            for _ in 0..indent do fmt.sbprint(buf, "    ");
  
             if spec == Spec.JSON do fmt.sbprint(buf, "\"");
             fmt.sbprint(buf, escape_string(key)); // @todo: check for whitespace in JSON5
@@ -621,7 +623,7 @@ buffer_print :: proc(buf: ^fmt.String_Buffer, value: Value, spec := Spec.JSON, i
         fmt.sbprintln(buf, "[");
 
         for value, i in v {
-            for _ in 0...indent do fmt.sbprint(buf, "    ");
+            for _ in 0..indent-1 do fmt.sbprint(buf, "    ");
 
             buffer_print(buf, value, spec, indent+1);
 
@@ -630,7 +632,7 @@ buffer_print :: proc(buf: ^fmt.String_Buffer, value: Value, spec := Spec.JSON, i
             fmt.sbprintln(buf);
         }
 
-        for _ in 0..indent do fmt.sbprint(buf, "    ");
+        for _ in 0..indent-1 do fmt.sbprint(buf, "    ");
 
         fmt.sbprint(buf, "]");
 
@@ -651,7 +653,7 @@ to_string :: inline proc(value: Value, spec := Spec.JSON) -> string {
 
 print :: inline proc(value: Value, spec := Spec.JSON) {
     json := to_string(value, spec);
-    defer free(json);
+    defer delete(json);
 
     fmt.printf("\n%s\n\n", json);
 }
@@ -664,7 +666,7 @@ print :: inline proc(value: Value, spec := Spec.JSON) {
 ///////////////////////////
 
 marshal :: proc(data: any, spec := Spec.JSON) -> (value : Value, success := true) {
-    type_info := type_info_base_without_enum(data.type_info);
+    type_info := type_info_base_without_enum(type_info_of(data.typeid));
     type_info  = type_info_base_without_enum(type_info);
 
     switch v in type_info.variant {
@@ -702,8 +704,8 @@ marshal :: proc(data: any, spec := Spec.JSON) -> (value : Value, success := true
     case Type_Info_Array:
         array := make([dynamic]Value, 0, v.count);
 
-        for i in 0..v.count {
-            if tmp, ok := marshal(transmute(any) raw.Any{rawptr(uintptr(data.data) + uintptr(v.elem_size*i)), v.elem}, spec); ok {
+        for i in 0..v.count-1 {
+            if tmp, ok := marshal(any{rawptr(uintptr(data.data) + uintptr(v.elem_size*i)), v.elem.id}, spec); ok {
                 append(&array, tmp);
             } else {
                 success = false;
@@ -714,12 +716,12 @@ marshal :: proc(data: any, spec := Spec.JSON) -> (value : Value, success := true
         value.value = cast(Array) array;
 
     case Type_Info_Slice:
-        a := cast(^raw.Slice) data.data;
+        a := cast(^mem.Raw_Slice) data.data;
 
         array := make([dynamic]Value, 0, a.len);
 
-        for i in 0..a.len {
-            if tmp, ok := marshal(transmute(any) raw.Any{rawptr(uintptr(a.data) + uintptr(v.elem_size*i)), v.elem}, spec); ok {
+        for i in 0..a.len-1 {
+            if tmp, ok := marshal(any{rawptr(uintptr(a.data) + uintptr(v.elem_size*i)), v.elem.id}, spec); ok {
                 append(&array, tmp);
             } else {
                 success = false;
@@ -732,10 +734,10 @@ marshal :: proc(data: any, spec := Spec.JSON) -> (value : Value, success := true
     case Type_Info_Dynamic_Array:
         array := make([dynamic]Value);
 
-        a := cast(^raw.Dynamic_Array) data.data;
+        a := cast(^mem.Raw_Dynamic_Array) data.data;
 
-        for i in 0..a.len {
-            if tmp, ok := marshal(transmute(any) raw.Any{rawptr(uintptr(a.data) + uintptr(v.elem_size*i)), v.elem}, spec); ok {
+        for i in 0..a.len-1 {
+            if tmp, ok := marshal(transmute(any) any{rawptr(uintptr(a.data) + uintptr(v.elem_size*i)), v.elem.id}, spec); ok {
                 append(&array, tmp);
             } else {
                 success = false;
@@ -749,7 +751,7 @@ marshal :: proc(data: any, spec := Spec.JSON) -> (value : Value, success := true
         object: map[string]Value;
 
         for ti, i in v.types {
-            if tmp, ok := marshal(transmute(any) raw.Any{rawptr(uintptr(data.data) + uintptr(v.offsets[i])), ti}, spec); ok {
+            if tmp, ok := marshal(any{rawptr(uintptr(data.data) + uintptr(v.offsets[i])), ti.id}, spec); ok {
                 object[v.names[i]] = tmp;
             } else {
                 success = false;
@@ -795,7 +797,7 @@ marshal_file :: inline proc(path: string, data: any, spec := Spec.JSON) -> bool 
 unmarshal :: proc[unmarshal_value_to_any, unmarshal_value_to_type];
 
 unmarshal_value_to_any :: proc(data : any, value : Value, spec := Spec.JSON) -> bool {
-    type_info := type_info_base_without_enum(data.type_info);
+    type_info := type_info_base_without_enum(type_info_of(data.typeid));
     type_info  = type_info_base_without_enum(type_info); // @todo: dirty fucking hack, won't hold up
 
     switch v in value.value {
@@ -804,7 +806,7 @@ unmarshal_value_to_any :: proc(data : any, value : Value, spec := Spec.JSON) -> 
         case Type_Info_Struct:
             for field, i in variant.names {
                 // @todo: stricter type checking and by-order instead of by-name as an option
-                a := transmute(any) raw.Any{rawptr(uintptr(data.data) + uintptr(variant.offsets[i])), variant.types[i]};
+                a := any{rawptr(uintptr(data.data) + uintptr(variant.offsets[i])), variant.types[i].id};
                 if !unmarshal(a, v[field], spec) do return false; // @error
             }
 
@@ -821,40 +823,44 @@ unmarshal_value_to_any :: proc(data : any, value : Value, spec := Spec.JSON) -> 
         case Type_Info_Array:
             if len(v) > variant.count do return false; // @error
 
-            for i in 0..variant.count {
-                a := transmute(any) raw.Any{rawptr(uintptr(data.data) + uintptr(variant.elem_size * i)), variant.elem};
+            for i in 0..variant.count-1 {
+                a := any{rawptr(uintptr(data.data) + uintptr(variant.elem_size * i)), variant.elem.id};
                 if !unmarshal(a, v[i], spec) do return false; // @error
             }
 
             return true;
 
         case Type_Info_Slice:
-            array := cast(^raw.Slice) data.data;
+            array := (^mem.Raw_Slice)(data.data);
 
             if len(v) > array.len do return false; // @error
             array.len = len(v);
 
             for i in 0..array.len {
-                a := transmute(any) raw.Any{rawptr(uintptr(array.data) + uintptr(variant.elem_size * i)), variant.elem};
+                a := any{rawptr(uintptr(array.data) + uintptr(variant.elem_size * i)), variant.elem.id};
                 if !unmarshal(a, v[i], spec) do return false; // @error
             }
 
             return true;
 
         case Type_Info_Dynamic_Array:
-            array := cast(^raw.Dynamic_Array) data.data;
+            array := (^mem.Raw_Dynamic_Array)(data.data);
 
             if array.cap == 0 {
-                array.data      = alloc(len(v)*variant.elem_size);
+                array.data      = mem.alloc(len(v)*variant.elem_size);
                 array.cap       = len(v);
                 array.allocator = context.allocator;
             }
 
-            if len(v) > array.cap do context <- mem.context_from_allocator(array.allocator) do resize(array.data, array.cap, len(v)*variant.elem_size);
+            if len(v) > array.cap {
+                context = mem.context_from_allocator(array.allocator);
+                mem.resize(array.data, array.cap, len(v)*variant.elem_size);
+            }
+
             array.len = len(v);
 
-            for i in 0..array.len {
-                a := transmute(any) raw.Any{rawptr(uintptr(array.data) + uintptr(variant.elem_size * i)), variant.elem};
+            for i in 0..array.len-1 {
+                a := any{rawptr(uintptr(array.data) + uintptr(variant.elem_size * i)), variant.elem.id};
                 if !unmarshal(a, v[i], spec) do return false; // @error
             }
 
@@ -865,7 +871,7 @@ unmarshal_value_to_any :: proc(data : any, value : Value, spec := Spec.JSON) -> 
 
     case String:
         if _, ok := type_info.variant.(Type_Info_String); ok {
-            tmp := cast(string) v;
+            tmp := string(v);
             mem.copy(data.data, &tmp, size_of(string));
 
             return true;
