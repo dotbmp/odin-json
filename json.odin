@@ -6,7 +6,7 @@
  *  @Creation: 28-11-2017 00:10:03 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 11-08-2018 12:39:46 UTC-5
+ *  @Last Time: 13-08-2018 15:11:16 UTC-5
  *  
  *  @Description:
  *  
@@ -55,7 +55,7 @@ escape_string :: proc(str: string) -> string {
             }
 
         case '"':  fmt.sbprint(&buf, "\\\"");
-        case '\'': fmt.sbprint(&buf, "\\'");
+        //case '\'': fmt.sbprint(&buf, "\\'");
         case '\\': fmt.sbprint(&buf, "\\\\");
         case '\a': fmt.sbprint(&buf, "\\a");
         case '\b': fmt.sbprint(&buf, "\\b");
@@ -580,7 +580,6 @@ parse_file :: inline proc(path: string, spec := Spec.JSON) -> (Value, bool) {
         return parse_string(string(bytes), spec, path);
     }
 
-    fmt.println(pat.full(path));
     return Value{}, false;
 }
 
@@ -594,45 +593,57 @@ parse_file :: inline proc(path: string, spec := Spec.JSON) -> (Value, bool) {
 buffer_print :: proc(buf: ^fmt.String_Buffer, value: Value, spec := Spec.JSON, indent := 0) {
     switch v in value.value {
     case Object:
-        fmt.sbprintln(buf, "{");
-        
-        i := 0;
-        for key, value in v {
-            for _ in 0..indent do fmt.sbprint(buf, "    ");
- 
-            if spec == Spec.JSON do fmt.sbprint(buf, "\"");
-            fmt.sbprint(buf, escape_string(key)); // @todo: check for whitespace in JSON5
-            if spec == Spec.JSON do fmt.sbprint(buf, "\"");
- 
-            fmt.sbprint(buf, ": ");
- 
-            buffer_print(buf, value, spec, indent+1);
+        fmt.sbprint(buf, "{");
 
-            if i != len(v)-1 || spec == Spec.JSON5 do fmt.sbprint(buf, ",");
+        if len(v) != 0 {
+            fmt.sbprint(buf, "\n");
+            indent += 1;
 
-            fmt.sbprintln(buf);
+            i := 0;
+            for key, value in v {
+                for _ in 0..indent-1 do fmt.sbprint(buf, "    ");
+     
+                if spec == Spec.JSON do fmt.sbprint(buf, "\"");
+                fmt.sbprint(buf, escape_string(key)); // @todo: check for whitespace in JSON5
+                if spec == Spec.JSON do fmt.sbprint(buf, "\"");
+     
+                fmt.sbprint(buf, ": ");
+     
+                buffer_print(buf, value, spec, indent);
 
-            i += 1;
+                if i != len(v)-1 || spec == Spec.JSON5 do fmt.sbprint(buf, ",");
+
+                fmt.sbprintln(buf);
+
+                i += 1;
+            }
+
+            indent -= 1;
+            for _ in 0..indent-1 do fmt.sbprint(buf, "    ");
         }
-
-        for _ in 0..indent do fmt.sbprint(buf, "    ");
 
         fmt.sbprint(buf, "}");
 
     case Array:
-        fmt.sbprintln(buf, "[");
+        fmt.sbprint(buf, "[");
 
-        for value, i in v {
+        if len(v) != 0 {
+            fmt.sbprint(buf, "\n");
+            indent += 1;
+            
+            for value, i in v {
+                for _ in 0..indent-1 do fmt.sbprint(buf, "    ");
+
+                buffer_print(buf, value, spec, indent);
+
+                if i != len(v)-1 || spec == Spec.JSON5 do fmt.sbprint(buf, ",");
+
+                fmt.sbprintln(buf);
+            }
+            
+            indent -= 1;
             for _ in 0..indent-1 do fmt.sbprint(buf, "    ");
-
-            buffer_print(buf, value, spec, indent+1);
-
-            if i != len(v)-1 || spec == Spec.JSON5 do fmt.sbprint(buf, ",");
-
-            fmt.sbprintln(buf);
         }
-
-        for _ in 0..indent-1 do fmt.sbprint(buf, "    ");
 
         fmt.sbprint(buf, "]");
 
@@ -666,6 +677,8 @@ print :: inline proc(value: Value, spec := Spec.JSON) {
 ///////////////////////////
 
 marshal :: proc(data: any, spec := Spec.JSON) -> (value : Value, success := true) {
+    success = true;
+
     type_info := type_info_base_without_enum(type_info_of(data.typeid));
     type_info  = type_info_base_without_enum(type_info);
 
@@ -765,7 +778,8 @@ marshal :: proc(data: any, spec := Spec.JSON) -> (value : Value, success := true
         // @todo: implement. ask bill about this, maps are fucky
         success = false;
 
-    case: success = false;
+    case:
+        success = false;
     }
 
     return;
@@ -781,7 +795,7 @@ marshal_string :: inline proc(data: any, spec := Spec.JSON) -> (string, bool) {
 
 marshal_file :: inline proc(path: string, data: any, spec := Spec.JSON) -> bool {
     if str, ok := marshal_string(data, spec); ok {
-        return !os.write_entire_file(path, cast([]u8) str);
+        return os.write_entire_file(path, cast([]u8) str);
     }
 
     return false;
