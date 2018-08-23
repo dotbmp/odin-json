@@ -6,7 +6,7 @@
  *  @Creation: 28-11-2017 00:10:03 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 13-08-2018 15:11:16 UTC-5
+ *  @Last Time: 22-08-2018 09:13:46 UTC-5
  *  
  *  @Description:
  *  
@@ -220,7 +220,8 @@ destroy :: proc(value : Value) {
         for val in v do destroy(val);
         delete(cast([dynamic]Value) v);
 
-    case String: delete(cast(string) v);
+    case String:
+        delete(v);
     }
 }
 
@@ -464,7 +465,7 @@ parse_error :: proc(using parser : ^Parser, message : string, args : ..any, loc 
     errors += 1;
 }
 
-allow :: proc(using parser : ^Parser, kinds : ..Kind) -> ^Token {
+allow :: proc(using parser: ^Parser, kinds: ..Kind) -> ^Token {
     if index >= len(tokens) do return nil;
 
     token := &tokens[index];
@@ -479,7 +480,7 @@ allow :: proc(using parser : ^Parser, kinds : ..Kind) -> ^Token {
     return nil;
 }
 
-expect :: proc(using parser : ^Parser, kinds : ..Kind, loc := #caller_location) -> ^Token {
+expect :: proc(using parser: ^Parser, kinds: ..Kind, loc := #caller_location) -> ^Token {
     token := allow(parser, ..kinds);
 
     if token == nil {
@@ -493,13 +494,15 @@ expect :: proc(using parser : ^Parser, kinds : ..Kind, loc := #caller_location) 
     return token;
 }
 
-skip :: proc(using parser : ^Parser, kinds : ..Kind) {
+skip :: proc(using parser: ^Parser, kinds: ..Kind) {
     for token := allow(parser, ..kinds); token != nil; token = allow(parser, ..kinds) {
         // continue
     }
 }
 
-parse :: proc(using parser : ^Parser) -> (value : Value, success := true) {
+parse :: proc(using parser: ^Parser) -> (value: Value, success: bool) {
+    success = true;
+
     if rhs := allow(parser, Kind.Open_Brace, Kind.Open_Bracket, Kind.Float, Kind.Integer, Kind.String, Kind.True, Kind.False, Kind.Null); rhs != nil {
         switch rhs.kind {
         case Kind.Open_Brace:
@@ -564,7 +567,7 @@ parse :: proc(using parser : ^Parser) -> (value : Value, success := true) {
     return;
 }
 
-parse_string :: inline proc(text : string, spec := Spec.JSON, path := "") -> (Value, bool) {
+parse_string :: inline proc(text: string, spec := Spec.JSON, path := "") -> (Value, bool) {
     parser := Parser{
         spec     = spec,
         filename = path,
