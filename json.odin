@@ -24,7 +24,7 @@ import "core:strings"
 import "core:unicode/utf8"
 import "core:unicode/utf16"
 
-import pat "bp:path"
+import pat "shared:path"
 
 
 
@@ -41,7 +41,7 @@ error :: proc(format: string, args: ..any) {
 }
 
 escape_string :: proc(str: string) -> string {
-    buf: fmt.String_Buffer;
+    buf: strings.Builder;
 
     for i := 0; i < len(str); {
         char, skip := utf8.decode_rune(cast([]u8) str[i:]);
@@ -50,7 +50,7 @@ escape_string :: proc(str: string) -> string {
         switch char {
         case: 
             if utf8.valid_rune(char) {
-                fmt.write_rune(&buf, char);
+                strings.write_rune(&buf, char);
             } else {
                 error("Invalid rune in string: '%c' (%H)", char, char);
             }
@@ -68,18 +68,18 @@ escape_string :: proc(str: string) -> string {
         }
     }
 
-    return fmt.to_string(buf);
+    return strings.to_string(buf);
 }
 
 unescape_string :: proc(str: string) -> string {
-    buf: fmt.String_Buffer;
+    buf: strings.Builder;
 
     for i := 0; i < len(str); {
         char, skip := utf8.decode_rune(([]u8)(str[i:]));
         i += skip;
 
         switch char {
-        case: fmt.write_rune(&buf, char);
+        case: strings.write_rune(&buf, char);
 
         case '"': // @note: do nothing.
 
@@ -88,17 +88,17 @@ unescape_string :: proc(str: string) -> string {
             i += skip;
 
             switch char {
-            case '\\': fmt.write_rune(&buf, '\\');
-            case '\'': fmt.write_rune(&buf, '\'');
-            case '"':  fmt.write_rune(&buf, '"');
+            case '\\': strings.write_rune(&buf, '\\');
+            case '\'': strings.write_rune(&buf, '\'');
+            case '"':  strings.write_rune(&buf, '"');
 
-            case 'a': fmt.write_rune(&buf, '\a');
-            case 'b': fmt.write_rune(&buf, '\b');
-            case 'f': fmt.write_rune(&buf, '\f');
-            case 'n': fmt.write_rune(&buf, '\n');
-            case 'r': fmt.write_rune(&buf, '\r');
-            case 't': fmt.write_rune(&buf, '\t');
-            case 'v': fmt.write_rune(&buf, '\v');
+            case 'a': strings.write_rune(&buf, '\a');
+            case 'b': strings.write_rune(&buf, '\b');
+            case 'f': strings.write_rune(&buf, '\f');
+            case 'n': strings.write_rune(&buf, '\n');
+            case 'r': strings.write_rune(&buf, '\r');
+            case 't': strings.write_rune(&buf, '\t');
+            case 'v': strings.write_rune(&buf, '\v');
 
             case 'u':
                 lo, hi: rune;
@@ -132,14 +132,14 @@ unescape_string :: proc(str: string) -> string {
                     }
                 }
 
-                fmt.write_rune(&buf, lo);
+                strings.write_rune(&buf, lo);
 
             case: error("Invalid escape character '%c'", char);
             }
         }
     }
 
-    return fmt.to_string(buf);
+    return strings.to_string(buf);
 }
 
 
@@ -576,7 +576,7 @@ parse_file :: inline proc(path: string, spec := Spec.JSON) -> (Value, bool) {
 // PRINTING
 ///////////////////////////
 
-buffer_print :: proc(buf: ^fmt.String_Buffer, value: Value, spec := Spec.JSON, indent := 0) {
+buffer_print :: proc(buf: ^strings.Builder, value: Value, spec := Spec.JSON, indent := 0) {
     switch v in value.value {
     case Object:
         fmt.sbprint(buf, "{");
@@ -643,9 +643,9 @@ buffer_print :: proc(buf: ^fmt.String_Buffer, value: Value, spec := Spec.JSON, i
 }
 
 to_string :: inline proc(value: Value, spec := Spec.JSON) -> string {
-    buf : fmt.String_Buffer;
+    buf : strings.Builder;
     buffer_print(&buf, value, spec);
-    return fmt.to_string(buf);
+    return strings.to_string(buf);
 }
 
 print :: inline proc(value: Value, spec := Spec.JSON) {
@@ -701,18 +701,18 @@ marshal :: proc(data: any, spec := Spec.JSON) -> (value : Value, success := true
     case Type_Info_Enum:
         for val, i in v.values {
             #complete switch vv in val {
-            case rune:    value.value = strings.new_string(v.names[vv]);
-            case i8:      value.value = strings.new_string(v.names[vv]);
-            case i16:     value.value = strings.new_string(v.names[vv]);
-            case i32:     value.value = strings.new_string(v.names[vv]);
-            case i64:     value.value = strings.new_string(v.names[vv]);
-            case int:     value.value = strings.new_string(v.names[vv]);
-            case u8:      value.value = strings.new_string(v.names[vv]);
-            case u16:     value.value = strings.new_string(v.names[vv]);
-            case u32:     value.value = strings.new_string(v.names[vv]);
-            case u64:     value.value = strings.new_string(v.names[vv]);
-            case uint:    value.value = strings.new_string(v.names[vv]);
-            case uintptr: value.value = strings.new_string(v.names[vv]);
+            case rune:    value.value = strings.clone(v.names[vv]);
+            case i8:      value.value = strings.clone(v.names[vv]);
+            case i16:     value.value = strings.clone(v.names[vv]);
+            case i32:     value.value = strings.clone(v.names[vv]);
+            case i64:     value.value = strings.clone(v.names[vv]);
+            case int:     value.value = strings.clone(v.names[vv]);
+            case u8:      value.value = strings.clone(v.names[vv]);
+            case u16:     value.value = strings.clone(v.names[vv]);
+            case u32:     value.value = strings.clone(v.names[vv]);
+            case u64:     value.value = strings.clone(v.names[vv]);
+            case uint:    value.value = strings.clone(v.names[vv]);
+            case uintptr: value.value = strings.clone(v.names[vv]);
             }
         }
 
@@ -810,7 +810,7 @@ marshal_file :: inline proc(path: string, data: any, spec := Spec.JSON) -> bool 
 // UNMARSHALLING
 ///////////////////////////
 
-unmarshal :: proc[unmarshal_value_to_any, unmarshal_value_to_type];
+unmarshal :: proc{unmarshal_value_to_any, unmarshal_value_to_type};
 
 unmarshal_value_to_any :: proc(data: any, value: Value, spec := Spec.JSON) -> bool {
     type_info := type_info_base(type_info_of(data.id));
@@ -996,7 +996,7 @@ unmarshal_value_to_type :: inline proc($T: typeid, value: Value, spec := Spec.JS
 }
 
 
-unmarshal_string :: proc[unmarshal_string_to_any, unmarshal_string_to_type];
+unmarshal_string :: proc{unmarshal_string_to_any, unmarshal_string_to_type};
 
 unmarshal_string_to_any :: inline proc(data: any, json: string, spec := Spec.JSON) -> bool {
     if value, ok := parse_text(json, spec); ok {
@@ -1017,7 +1017,7 @@ unmarshal_string_to_type :: inline proc($T: typeid, json: string, spec := Spec.J
 }
 
 
-unmarshal_file :: proc[unmarshal_file_to_any, unmarshal_file_to_type];
+unmarshal_file :: proc{unmarshal_file_to_any, unmarshal_file_to_type};
 
 unmarshal_file_to_any :: inline proc(data: any, path: string, spec := Spec.JSON) -> bool {
     if value, ok := parse_file(path, spec); ok {
