@@ -66,7 +66,6 @@ unescape_string :: proc(str: string) -> (string, bool) {
         case '"': // @note: do nothing.
 
         case '\\':
-            char, skip = inline utf8.decode_rune(([]u8)(str[i:]));
             i += skip;
 
             switch char {
@@ -86,45 +85,26 @@ unescape_string :: proc(str: string) -> (string, bool) {
                 lo, hi: rune;
                 hex := [?]u8{'0', 'x', '0', '0', '0', '0'};
 
-                c0, s0 := inline utf8.decode_rune(([]u8)(str[i:])); hex[2] = (u8)(c0); i += s0;
-                c1, s1 := inline utf8.decode_rune(([]u8)(str[i:])); hex[3] = (u8)(c1); i += s1;
-                c2, s2 := inline utf8.decode_rune(([]u8)(str[i:])); hex[4] = (u8)(c2); i += s2;
-                c3, s3 := inline utf8.decode_rune(([]u8)(str[i:])); hex[5] = (u8)(c3); i += s3;
 
-                lo = rune(inline strconv.parse_int(string(hex[:])));
 
-                if inline utf16.is_surrogate(lo) {
-                    c0, s0 := inline utf8.decode_rune(([]u8)(str[i:])); i += s0;
-                    c1, s1 := inline utf8.decode_rune(([]u8)(str[i:])); i += s1;
 
                     if c0 == '\\' && c1 == 'u' {
-                        c0, s0 = inline utf8.decode_rune(([]u8)(str[i:])); hex[2] = (u8)(c0); i += s0;
-                        c1, s1 = inline utf8.decode_rune(([]u8)(str[i:])); hex[3] = (u8)(c1); i += s1;
-                        c2, s2 = inline utf8.decode_rune(([]u8)(str[i:])); hex[4] = (u8)(c2); i += s2;
-                        c3, s3 = inline utf8.decode_rune(([]u8)(str[i:])); hex[5] = (u8)(c3); i += s3;                      
 
-                        hi = rune(inline strconv.parse_u64(string(hex[:])));
-                        lo = inline utf16.decode_surrogate_pair(lo, hi);
 
                         if lo == utf16.REPLACEMENT_CHAR {
-                            return "", false;
                         }
                     } else {
-                        return "", false;
                     }
                 }
 
                 inline strings.write_rune(&buf, lo);
 
-            case: return "", false;
             }
         }
     }
 
     return inline strings.to_string(buf), true;
 }
-
-error :: proc{lexer_error, parser_error};
 
 
 
