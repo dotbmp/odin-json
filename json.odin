@@ -232,7 +232,9 @@ next_char :: inline proc"contextless"(using lexer: ^Lexer) -> rune #no_bounds_ch
     index += skip;
     chars += 1;
 
-    char, skip = inline utf8.decode_rune(([]u8)(source[index:]));
+    //char, skip = inline utf8.decode_rune(([]u8)(source[index:]));
+    char = index < len(source) ? rune(source[index]) : EOB;
+    skip = 1;
 
     return char;
 }
@@ -256,8 +258,8 @@ lex :: proc(text: string, filename := "") -> []Token #no_bounds_check {
             if next_char(&lexer) == 'u' &&
                next_char(&lexer) == 'l' &&
                next_char(&lexer) == 'l' {
-                next_char(&lexer);
                 token.kind = NULL;
+                next_char(&lexer);
             } else {
                 error(&lexer, "Invalid identifier; expected 'null'");
             }
@@ -266,8 +268,8 @@ lex :: proc(text: string, filename := "") -> []Token #no_bounds_check {
             if next_char(&lexer) == 'r' &&
                next_char(&lexer) == 'u' &&
                next_char(&lexer) == 'e' {
+                token.kind = TRUE;
                 next_char(&lexer);
-                token.kind = NULL;
             } else {
                 error(&lexer, "Invalid identifier; expected 'true'");
             }
@@ -277,8 +279,8 @@ lex :: proc(text: string, filename := "") -> []Token #no_bounds_check {
                next_char(&lexer) == 'l' &&
                next_char(&lexer) == 's' &&
                next_char(&lexer) == 'e' {
+                token.kind = FALSE;
                 next_char(&lexer);
-                token.kind = NULL;
             } else {
                 error(&lexer, "Invalid identifier; expected 'false'");
             }
@@ -420,10 +422,6 @@ Parser :: struct {
     errors: int,
 }
 
-slice_between :: inline proc(a, b: ^$T) -> []T {
-    return transmute([]T) mem.Raw_Slice{rawptr(a), int((uintptr(b) - uintptr(a)) / size_of(T))};
-}
-
 parser_error :: proc(using parser: ^Parser, message: string, args: ..any, loc := #caller_location) {
     msg := fmt.aprintf(message, ..args);
     defer delete(msg);
@@ -442,7 +440,7 @@ parser_error :: proc(using parser: ^Parser, message: string, args: ..any, loc :=
     errors += 1;
 }
 
-allow :: proc(using parser: ^Parser, kinds: ..Kind) -> ^Token #no_bounds_check {
+allow :: inline proc(using parser: ^Parser, kinds: ..Kind) -> ^Token #no_bounds_check {
     if index >= len(tokens) do return nil;
 
     token := &tokens[index];
@@ -457,7 +455,7 @@ allow :: proc(using parser: ^Parser, kinds: ..Kind) -> ^Token #no_bounds_check {
     return nil;
 }
 
-expect :: proc(using parser: ^Parser, kinds: ..Kind, loc := #caller_location) -> ^Token {
+expect :: inline proc(using parser: ^Parser, kinds: ..Kind, loc := #caller_location) -> ^Token {
     token := allow(parser, ..kinds);
 
     if token == nil {
@@ -506,99 +504,113 @@ parse :: proc(using parser: ^Parser) -> (Value, bool) {
 
     // @todo(bp): nice shiny error message
 
-    return nil, false;
+    return ---, false;
 }
 
 parse_object :: proc(using parser: ^Parser) -> (Value, bool) {
     object: map[string]Value;
-    
-    if expect(parser, OPEN_BRACE) != nil {
-        loop: for {
-            if allow(parser, CLOSE_BRACE) != nil {
-                return object, true;
-            }
 
-            if key := expect(parser, STRING); key != nil {
-                switch key.kind {
-                case STRING:
-                    if expect(parser, COLON) != nil {
-                        if val, ok := parse(parser); ok {
-                            if str, ok := unescape_string(key.text); ok {
-                                object[str] = val;
+    if expect(parser, OPEN_BRACE) == nil {
+        destroy(object);
+        return ---, false;
+    }
 
-                                if allow(parser, COMMA) == nil {
-                                    if expect(parser, CLOSE_BRACE) != nil {
-                                        return object, true;
-                                    }
-                                    else {
-                                        break loop;
-                                    }
-                                }
-                            }
-                            else {
-                                error(parser, "Failed to escape string");
-                                break loop;
-                            }
-                        }
-                        else {
-                            error(parser, "Expected an object value.");
-                            break loop;
-                        }
+    if allow(parser, CLOSE_BRACKET) != nil {
+        return object, true;
+    }
+
+    for {
+        key := expect(parser, STRING);
+        if key == nil {
+            destroy(object);
+            return ---, false;
+        }
+
+        if expect(parser, COLON) == nil {
+            destroy(object);
+            return ---, false;
+        }
+
+        if value, ok := parse(parser); ok {
+            if str, ok := unescape_string(key.text); ok {
+                object[str] = value;
+
+                if token := expect(parser, COMMA, CLOSE_BRACE); token != nil {
+                    switch token.kind {
+                    case COMMA:       continue;
+                    case CLOSE_BRACE: break;
                     }
+                    break;
+                } else {
+                    destroy(object);
+                    return ---, false;
                 }
             }
+            else {
+                error(parser, "Failed to escape string");
+                destroy(object);
+                break;
+            }
+        }
+        else {
+            error(parser, "Expected an object value.");
+            destroy(object);
+            return ---, false;
         }
     }
 
-    destroy(object);
-    return nil, false;
+    return object, true;
 }
 
 parse_array :: proc(using parser: ^Parser) -> (Value, bool) {
     array: [dynamic]Value;
 
-    if expect(parser, OPEN_BRACKET) != nil {
-        if allow(parser, CLOSE_BRACKET) != nil {
-            return array[:], true;
-        }
+    if expect(parser, OPEN_BRACKET) == nil {
+        destroy(array[:]);
+        return ---, false;
+    }
 
-        for {
-            if val, ok := parse(parser); ok {
-                append(&array, val);
+    if allow(parser, CLOSE_BRACKET) != nil {
+        return array[:], true;
+    }
 
-                if allow(parser, COMMA) == nil {
-                    if expect(parser, CLOSE_BRACKET) != nil {
-                        return array[:], true;
-                    }
-                    else {
-                        break;
-                    }
+    for {
+        if value, ok := parse(parser); ok {
+            append(&array, value);
+
+            if token := expect(parser, COMMA, CLOSE_BRACKET); token != nil {
+                switch token.kind {
+                case COMMA:         continue;
+                case CLOSE_BRACKET: break;
                 }
-            }
-            else {
-                error(parser, "Expected an array element.");
                 break;
+            } else {
+                destroy(array[:]);
+                return ---, false;
             }
+        }
+        else {
+            error(parser, "Expected an array element.");
+            return ---, false;
         }
     }
 
-    destroy(array[:]);
-    return nil, false;
+    return array[:], true;
 }
 
 parse_literal :: proc(using parser: ^Parser) -> (Value, bool) {
-    if lit := expect(parser, STRING, INT, FLOAT, TRUE, FALSE, NULL); lit != nil {
-        switch lit.kind {
-        case STRING: return unescape_string(lit.text);
-        case INT:    return strconv.parse_i64(lit.text), true;
-        case FLOAT:  return strconv.parse_f64(lit.text), true;
+    if token := expect(parser, STRING, INT, FLOAT, TRUE, FALSE, NULL); token != nil {
+        switch token.kind {
+        case STRING: return unescape_string(token.text);
+        case INT:    return strconv.parse_i64(token.text), true;
+        case FLOAT:  return strconv.parse_f64(token.text), true;
         case TRUE:   return true, true;
         case FALSE:  return false, true;
         case NULL:   return nil, true;
         }
     }
 
-    return nil, false;
+    return ---, false;
 }
 
 
