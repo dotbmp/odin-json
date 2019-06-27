@@ -1,31 +1,18 @@
-/*
- *  @Name:     json
- *  
- *  @Author:   Brendan Punsky
- *  @Email:    bpunsky@gmail.com
- *  @Creation: 28-11-2017 00:10:03 UTC-5
- *
- *  @Last By:   Brendan Punsky
- *  @Last Time: 05-12-2018 04:58:42 UTC-5
- *  
- *  @Description:
- *  
- */
-
 package json
-
-using import "core:runtime"
 
 import "core:fmt"
 import "core:mem"
 import "core:os"
+import "core:runtime"
 import "core:strconv"
 import "core:strings"
-import "core:unicode/utf8"
 import "core:unicode/utf16"
+import "core:unicode/utf8"
 
-import pat "bp:path"
+import "shared:path"
 
+
+DEBUG :: true;
 
 
 ////////////////////////////
@@ -33,114 +20,111 @@ import pat "bp:path"
 // GENERAL
 ////////////////////////////
 
-error :: proc(format: string, args: ..any) {
-    message := fmt.aprintf(format, ..args);
-    defer delete(message);
-
-    fmt.printf_err("Error: %s\n", message);
-}
-
-escape_string :: proc(str: string) -> string {
-    buf: fmt.String_Buffer;
+escape_string :: proc(str: string) -> (string, bool) {
+    buf: strings.Builder;
 
     for i := 0; i < len(str); {
-        char, skip := utf8.decode_rune(cast([]u8) str[i:]);
+        char, skip := inline utf8.decode_rune(([]u8)(str[i:]));
         i += skip;
 
         switch char {
         case: 
-            if utf8.valid_rune(char) {
-                fmt.write_rune(&buf, char);
-            } else {
-                error("Invalid rune in string: '%c' (%H)", char, char);
+            if inline utf8.valid_rune(char) {
+                inline strings.write_rune(&buf, char);
+            }
+            else {
+                strings.destroy_builder(&buf);
+                return "", false;
             }
 
-        case '"':  fmt.sbprint(&buf, "\\\"");
-        //case '\'': fmt.sbprint(&buf, "\\'");
-        case '\\': fmt.sbprint(&buf, "\\\\");
-        case '\a': fmt.sbprint(&buf, "\\a");
-        case '\b': fmt.sbprint(&buf, "\\b");
-        case '\f': fmt.sbprint(&buf, "\\f");
-        case '\n': fmt.sbprint(&buf, "\\n");
-        case '\r': fmt.sbprint(&buf, "\\r");
-        case '\t': fmt.sbprint(&buf, "\\t");
-        case '\v': fmt.sbprint(&buf, "\\v");
+        case '"':  inline fmt.sbprint(&buf, "\\\"");
+        //case '\'': inline fmt.sbprint(&buf, "\\'");
+        case '\\': inline fmt.sbprint(&buf, "\\\\");
+        case '\a': inline fmt.sbprint(&buf, "\\a");
+        case '\b': inline fmt.sbprint(&buf, "\\b");
+        case '\f': inline fmt.sbprint(&buf, "\\f");
+        case '\n': inline fmt.sbprint(&buf, "\\n");
+        case '\r': inline fmt.sbprint(&buf, "\\r");
+        case '\t': inline fmt.sbprint(&buf, "\\t");
+        case '\v': inline fmt.sbprint(&buf, "\\v");
         }
     }
 
-    return fmt.to_string(buf);
+    return inline strings.to_string(buf), true;
 }
 
-unescape_string :: proc(str: string) -> string {
-    buf: fmt.String_Buffer;
+unescape_string :: proc(str: string) -> (string, bool) {
+    buf: strings.Builder;
 
     for i := 0; i < len(str); {
-        char, skip := utf8.decode_rune(([]u8)(str[i:]));
+        char, skip := inline utf8.decode_rune(([]u8)(str[i:]));
         i += skip;
 
         switch char {
-        case: fmt.write_rune(&buf, char);
+        case: inline strings.write_rune(&buf, char);
 
         case '"': // @note: do nothing.
 
         case '\\':
-            char, skip = utf8.decode_rune(([]u8)(str[i:]));
+            char, skip = inline utf8.decode_rune(([]u8)(str[i:]));
             i += skip;
 
             switch char {
-            case '\\': fmt.write_rune(&buf, '\\');
-            case '\'': fmt.write_rune(&buf, '\'');
-            case '"':  fmt.write_rune(&buf, '"');
+            case '\\': inline strings.write_rune(&buf, '\\');
+            case '\'': inline strings.write_rune(&buf, '\'');
+            case '"':  inline strings.write_rune(&buf, '"');
 
-            case 'a': fmt.write_rune(&buf, '\a');
-            case 'b': fmt.write_rune(&buf, '\b');
-            case 'f': fmt.write_rune(&buf, '\f');
-            case 'n': fmt.write_rune(&buf, '\n');
-            case 'r': fmt.write_rune(&buf, '\r');
-            case 't': fmt.write_rune(&buf, '\t');
-            case 'v': fmt.write_rune(&buf, '\v');
+            case 'a': inline strings.write_rune(&buf, '\a');
+            case 'b': inline strings.write_rune(&buf, '\b');
+            case 'f': inline strings.write_rune(&buf, '\f');
+            case 'n': inline strings.write_rune(&buf, '\n');
+            case 'r': inline strings.write_rune(&buf, '\r');
+            case 't': inline strings.write_rune(&buf, '\t');
+            case 'v': inline strings.write_rune(&buf, '\v');
 
             case 'u':
                 lo, hi: rune;
                 hex := [?]u8{'0', 'x', '0', '0', '0', '0'};
 
-                c0, s0 := utf8.decode_rune(([]u8)(str[i:]));  hex[2] = (u8)(c0);  i += s0;
-                c1, s1 := utf8.decode_rune(([]u8)(str[i:]));  hex[3] = (u8)(c1);  i += s1;
-                c2, s2 := utf8.decode_rune(([]u8)(str[i:]));  hex[4] = (u8)(c2);  i += s2;
-                c3, s3 := utf8.decode_rune(([]u8)(str[i:]));  hex[5] = (u8)(c3);  i += s3;
+                c0, s0 := inline utf8.decode_rune(([]u8)(str[i:])); hex[2] = (u8)(c0); i += s0;
+                c1, s1 := inline utf8.decode_rune(([]u8)(str[i:])); hex[3] = (u8)(c1); i += s1;
+                c2, s2 := inline utf8.decode_rune(([]u8)(str[i:])); hex[4] = (u8)(c2); i += s2;
+                c3, s3 := inline utf8.decode_rune(([]u8)(str[i:])); hex[5] = (u8)(c3); i += s3;
 
-                lo = rune(strconv.parse_int(string(hex[:])));
+                lo = rune(inline strconv.parse_int(string(hex[:])));
 
-                if utf16.is_surrogate(lo) {
-                    c0, s0 := utf8.decode_rune(([]u8)(str[i:]));  i += s0;
-                    c1, s1 := utf8.decode_rune(([]u8)(str[i:]));  i += s1;
+                if inline utf16.is_surrogate(lo) {
+                    c0, s0 := inline utf8.decode_rune(([]u8)(str[i:])); i += s0;
+                    c1, s1 := inline utf8.decode_rune(([]u8)(str[i:])); i += s1;
 
                     if c0 == '\\' && c1 == 'u' {
-                        c0, s0 = utf8.decode_rune(([]u8)(str[i:]));  hex[2] = (u8)(c0);  i += s0;
-                        c1, s1 = utf8.decode_rune(([]u8)(str[i:]));  hex[3] = (u8)(c1);  i += s1;
-                        c2, s2 = utf8.decode_rune(([]u8)(str[i:]));  hex[4] = (u8)(c2);  i += s2;
-                        c3, s3 = utf8.decode_rune(([]u8)(str[i:]));  hex[5] = (u8)(c3);  i += s3;                      
+                        c0, s0 = inline utf8.decode_rune(([]u8)(str[i:])); hex[2] = (u8)(c0); i += s0;
+                        c1, s1 = inline utf8.decode_rune(([]u8)(str[i:])); hex[3] = (u8)(c1); i += s1;
+                        c2, s2 = inline utf8.decode_rune(([]u8)(str[i:])); hex[4] = (u8)(c2); i += s2;
+                        c3, s3 = inline utf8.decode_rune(([]u8)(str[i:])); hex[5] = (u8)(c3); i += s3;                      
 
-                        hi = rune(strconv.parse_u64(string(hex[:])));
-                        lo = utf16.decode_surrogate_pair(lo, hi);
+                        hi = rune(inline strconv.parse_u64(string(hex[:])));
+                        lo = inline utf16.decode_surrogate_pair(lo, hi);
 
                         if lo == utf16.REPLACEMENT_CHAR {
-                            error("Invalid surrogate pair");
+                            return "", false;
                         }
                     } else {
-                        error("Expected a surrogate pair");
+                        return "", false;
                     }
                 }
 
-                fmt.write_rune(&buf, lo);
+                inline strings.write_rune(&buf, lo);
 
-            case: error("Invalid escape character '%c'", char);
+            case: return "", false;
             }
         }
     }
 
-    return fmt.to_string(buf);
+    return inline strings.to_string(buf), true;
 }
+
+error :: proc{lexer_error, parser_error};
 
 
 
@@ -149,79 +133,68 @@ unescape_string :: proc(str: string) -> string {
 // TYPES
 ////////////////////////////
 
-Spec :: enum {JSON, JSON5};
-
-Null   :: distinct rawptr;
-Int    ::          i64;
-Float  ::          f64;
-Bool   ::          bool;
-String ::          string;
-Array  :: distinct [dynamic]Value;
-Object :: distinct map[string]Value;
-
-Value :: struct {
-    using token: Token,
-
-    value: union {
-        Null,
-        Int,
-        Float,
-        Bool,
-        String,
-        Array,
-        Object,
-    },
+Value :: union {
+    i64,
+    f64,
+    bool,
+    string,
+    []Value,
+    map[string]Value,
 }
 
 Token :: struct {
-    using cursor: Cursor,
-
+    using pos: Pos,
     kind: Kind,
     text: string,
 }
 
-Kind :: enum {
-    Invalid,
+using Kind :: enum {
+    INVALID,
 
-    Null,
-    True,
-    False,
-
-    Symbol,
+    NULL,
+    TRUE,
+    FALSE,
     
-    Float,
-    Integer,
-    String,
+    FLOAT,
+    INT,
+    STRING,
 
-    Colon,
-    Comma,
+    COLON,
+    COMMA,
     
-    Open_Brace,
-    Close_Brace,
+    OPEN_BRACE,
+    CLOSE_BRACE,
 
-    Open_Bracket,
-    Close_Bracket,
+    OPEN_BRACKET,
+    CLOSE_BRACKET,
 
-    End,
+    END,
 }
 
-Cursor :: struct {
+Pos :: struct {
     index: int,
     lines: int,
     chars: int,
 }
 
 destroy :: proc(value: Value) {
-    switch v in value.value {
-    case Object:
-        for _, val in v do destroy(val);
-        delete(cast(map[string]Value) v);
+    switch v in value {
+    case map[string]Value:
+        for key, val in v {
+            delete(key);
+            destroy(val);
+        }
 
-    case Array:
-        for val in v do destroy(val);
-        delete(cast([dynamic]Value) v);
+        delete(v);
 
-    case String:
+    case []Value:
+        for val in v {
+            destroy(val);
+        }
+
+        delete(v);
+
+    case string:
         delete(v);
     }
 }
@@ -237,7 +210,7 @@ EOF :: utf8.RUNE_EOF;
 EOB :: '\x00';
 
 Lexer :: struct {
-    using cursor: Cursor,
+    using pos: Pos,
     path:   string,
     source: string,
     char:   rune,
@@ -245,11 +218,12 @@ Lexer :: struct {
     errors: int,
 }
 
-lex_error :: inline proc(using lexer : ^Lexer, format: string, args: ..any, loc := #caller_location) {
-    message := fmt.aprintf(format, ..args);
-    defer delete(message);
+lexer_error :: inline proc(using lexer : ^Lexer, format: string, args: ..any, loc := #caller_location) {
+    fmt.printf_err("%s(%d:%d) Lexing error: %s\n", path, lines, chars, fmt.tprintf(format, ..args));
 
-    fmt.printf_err("%s(%d,%d) Lexing error: %s\n", path, lines, chars, message);
+    when #defined(DEBUG) {
+        fmt.printf_err("    %s(%d:%d): %s\n", loc.file_path, loc.line, loc.column, loc.procedure);
+    }
 
     errors += 1;
 }
@@ -265,35 +239,48 @@ next_char :: inline proc"contextless"(using lexer: ^Lexer) -> rune #no_bounds_ch
 
 lex :: proc(text: string, filename := "") -> []Token #no_bounds_check {
     using lexer := Lexer {
-        cursor = Cursor{lines=1},
+        pos    = Pos{lines=1},
         path   = filename,
         source = text,
     };
 
     tokens := make([dynamic]Token, 0, 1024*1024*32); // @todo(bp): dial in
-    toks := (^mem.Raw_Dynamic_Array)(&tokens);
 
     next_char(&lexer);
 
     loop: for {
-        token := Token{cursor, Kind.Invalid, ---};
+        token := Token{pos, ---, ---};
 
         switch char {
-        case 'A'..'Z', 'a'..'z', '_':
-            token.kind = Kind.Symbol;
-
-            for {
-                switch next_char(&lexer) {
-                case 'A'..'Z', 'a'..'z', '0'..'9', '_': continue;
-                }
-
-                break;
+        case 'n':
+            if next_char(&lexer) == 'u' &&
+               next_char(&lexer) == 'l' &&
+               next_char(&lexer) == 'l' {
+                next_char(&lexer);
+                token.kind = NULL;
+            } else {
+                error(&lexer, "Invalid identifier; expected 'null'");
             }
-
-            switch source[token.index:index] {
-            case "null":  token.kind = Kind.Null;
-            case "true":  token.kind = Kind.True;
-            case "false": token.kind = Kind.False;
+        
+        case 't':
+            if next_char(&lexer) == 'r' &&
+               next_char(&lexer) == 'u' &&
+               next_char(&lexer) == 'e' {
+                next_char(&lexer);
+                token.kind = NULL;
+            } else {
+                error(&lexer, "Invalid identifier; expected 'true'");
+            }
+        
+        case 'f':
+            if next_char(&lexer) == 'a' &&
+               next_char(&lexer) == 'l' &&
+               next_char(&lexer) == 's' &&
+               next_char(&lexer) == 'e' {
+                next_char(&lexer);
+                token.kind = NULL;
+            } else {
+                error(&lexer, "Invalid identifier; expected 'false'");
             }
 
         case '+', '-':
@@ -304,16 +291,16 @@ lex :: proc(text: string, filename := "") -> []Token #no_bounds_check {
             fallthrough;
 
         case '0'..'9':
-            token.kind = Kind.Integer;
+            token.kind = INT;
 
             for {
                 switch next_char(&lexer) {
                 case '0'..'9': continue;
                 case '.':
-                    if token.kind == Kind.Float {
-                        lex_error(&lexer, "Double radix in float");
+                    if token.kind == FLOAT {
+                        error(&lexer, "Double radix in float");
                     } else {
-                        token.kind = Kind.Float;
+                        token.kind = FLOAT;
                     }
                     continue;
                 }
@@ -322,7 +309,7 @@ lex :: proc(text: string, filename := "") -> []Token #no_bounds_check {
             }
 
         case '"':
-            token.kind = Kind.String;
+            token.kind = STRING;
 
             // @todo(bpunsky): proper string parsing? or just handle when converting to a value?
 
@@ -351,27 +338,27 @@ lex :: proc(text: string, filename := "") -> []Token #no_bounds_check {
             }
 
         case ',':
-            token.kind = Kind.Comma;
+            token.kind = COMMA;
             next_char(&lexer);
 
         case ':':
-            token.kind = Kind.Colon;
+            token.kind = COLON;
             next_char(&lexer);
 
         case '{':
-            token.kind = Kind.Open_Brace;
+            token.kind = OPEN_BRACE;
             next_char(&lexer);
 
         case '}':
-            token.kind = Kind.Close_Brace;
+            token.kind = CLOSE_BRACE;
             next_char(&lexer);
 
         case '[':
-            token.kind = Kind.Open_Bracket;
+            token.kind = OPEN_BRACKET;
             next_char(&lexer);
 
         case ']':
-            token.kind = Kind.Close_Bracket;
+            token.kind = CLOSE_BRACKET;
             next_char(&lexer);
 
         case ' ', '\t':
@@ -392,11 +379,12 @@ lex :: proc(text: string, filename := "") -> []Token #no_bounds_check {
             chars  = 1;
             continue;
 
-        case EOB, EOF, utf8.RUNE_ERROR: break loop; // @todo(bp): RUNE_ERROR seems sketchy
+        case EOB, EOF, utf8.RUNE_ERROR:
+            break loop; // @todo(bp): RUNE_ERROR seems sketchy
 
         case:
-            lex_error(&lexer, "Illegal rune '%v' (%x)", char, (int)(char));
-            next_char(&lexer);
+            error(&lexer, "Illegal rune '%v' (%x)", char, (int)(char));
+            break loop;
         }
 
         token.text = source[token.index:index];
@@ -410,7 +398,7 @@ lex :: proc(text: string, filename := "") -> []Token #no_bounds_check {
         return nil;
     }
 
-    inline append(&tokens, Token{cursor, Kind.End, ""});
+    inline append(&tokens, Token{pos, END, ""});
 
     return tokens[:];
 }
@@ -423,8 +411,6 @@ lex :: proc(text: string, filename := "") -> []Token #no_bounds_check {
 ///////////////////////////
 
 Parser :: struct {
-    spec: Spec,
-
     filename: string,
     source:   string,
 
@@ -434,7 +420,11 @@ Parser :: struct {
     errors: int,
 }
 
-parse_error :: proc(using parser: ^Parser, message: string, args: ..any, loc := #caller_location) {
+slice_between :: inline proc(a, b: ^$T) -> []T {
+    return transmute([]T) mem.Raw_Slice{rawptr(a), int((uintptr(b) - uintptr(a)) / size_of(T))};
+}
+
+parser_error :: proc(using parser: ^Parser, message: string, args: ..any, loc := #caller_location) {
     msg := fmt.aprintf(message, ..args);
     defer delete(msg);
 
@@ -443,6 +433,10 @@ parse_error :: proc(using parser: ^Parser, message: string, args: ..any, loc := 
         fmt.printf_err("%s(%d,%d) Error: %s\n", filename, token.lines, token.chars, msg);
     } else {
         fmt.printf_err("%s Error: %s\n", filename, msg);
+    }
+
+    when #defined(DEBUG) {
+        fmt.printf_err("    %s(%d:%d): %s\n", loc.file_path, loc.line, loc.column, loc.procedure);
     }
 
     errors += 1;
@@ -468,9 +462,9 @@ expect :: proc(using parser: ^Parser, kinds: ..Kind, loc := #caller_location) ->
 
     if token == nil {
         if index >= len(tokens) {
-            parse_error(parser, "Cannot look past the end of the token stream");
+            error(parser, "Cannot look past the end of the token stream");
         } else {
-            parse_error(parser, "Expected %v; got %v", kinds, token.kind, loc);
+            error(parser, "Expected %v; got %v", kinds, token.kind, loc);
         }
     }
 
@@ -483,76 +477,9 @@ skip :: proc(using parser: ^Parser, kinds: ..Kind) {
     }
 }
 
-parse :: proc(using parser: ^Parser) -> (value: Value, success: bool) {
-    success = true;
 
-    if rhs := allow(parser, Kind.Open_Brace, Kind.Open_Bracket, Kind.Float, Kind.Integer, Kind.String, Kind.True, Kind.False, Kind.Null); rhs != nil {
-        switch rhs.kind {
-        case Kind.Open_Brace:
-            object : Object;
-            
-            for {
-                if lhs := allow(parser, Kind.String, Kind.Symbol); lhs != nil {
-                    if expect(parser, Kind.Colon) == nil do success = false;
-                    
-                    if val, ok := parse(parser); ok {
-                        text := unescape_string(lhs.text);
-                        object[text] = val;
-                    } else {
-                        if expect(parser, Kind.Close_Brace) == nil do success = false;
-                        break;
-                    }
-                } else {
-                    if expect(parser, Kind.Close_Brace) == nil do success = false;
-                    break;
-                }
-
-                if allow(parser, Kind.Comma) == nil {
-                    if expect(parser, Kind.Close_Brace) == nil do success = false;
-                    break;
-                }
-            }
-            
-            value.value = object;
-
-        case Kind.Open_Bracket:
-            array: Array;
-            
-            for {
-                if val, ok := parse(parser); ok {
-                    append(&array, val);
-                } else {
-                    if expect(parser, Kind.Close_Bracket) == nil do success = false;
-                    break;
-                }
-
-                if allow(parser, Kind.Comma) == nil {
-                    if expect(parser, Kind.Close_Bracket) == nil do success = false;
-                    break;
-                }
-            }
-
-            value.value = array;
-
-        case Kind.String:  value.value = unescape_string(rhs.text);
-        case Kind.Integer: value.value = strconv.parse_i64(rhs.text);
-        case Kind.Float:   value.value = strconv.parse_f64(rhs.text);
-        case Kind.True:    value.value = true;
-        case Kind.False:   value.value = false;
-        case Kind.Null:    value.value = Null{};
-
-        case: success = false;
-        }
-    } else {
-        success = false;
-    }
-
-    return;
-}
-
-parse_text :: inline proc(text: string, spec := Spec.JSON, path := "") -> (Value, bool) {
+parse_text :: inline proc(text: string, path := "") -> (Value, bool) {
     parser := Parser{
-        spec     = spec,
         filename = path,
         source   = text,
         tokens   = lex(text, path),
@@ -561,12 +488,117 @@ parse_text :: inline proc(text: string, spec := Spec.JSON, path := "") -> (Value
     return parse(&parser);
 }
 
-parse_file :: inline proc(path: string, spec := Spec.JSON) -> (Value, bool) {
+parse_file :: inline proc(path: string) -> (Value, bool) {
     if bytes, ok := os.read_entire_file(path); ok {
-        return parse_text(string(bytes), spec, path);
+        return parse_text(string(bytes), path);
     }
 
     return Value{}, false;
+}
+
+
+parse :: proc(using parser: ^Parser) -> (Value, bool) {
+    switch tokens[index].kind {
+    case OPEN_BRACE:                            return parse_object(parser);
+    case OPEN_BRACKET:                          return parse_array(parser);
+    case STRING, INT, FLOAT, TRUE, FALSE, NULL: return parse_literal(parser);
+    }
+
+    // @todo(bp): nice shiny error message
+
+    return nil, false;
+}
+
+parse_object :: proc(using parser: ^Parser) -> (Value, bool) {
+    object: map[string]Value;
+    
+    if expect(parser, OPEN_BRACE) != nil {
+        loop: for {
+            if allow(parser, CLOSE_BRACE) != nil {
+                return object, true;
+            }
+
+            if key := expect(parser, STRING); key != nil {
+                switch key.kind {
+                case STRING:
+                    if expect(parser, COLON) != nil {
+                        if val, ok := parse(parser); ok {
+                            if str, ok := unescape_string(key.text); ok {
+                                object[str] = val;
+
+                                if allow(parser, COMMA) == nil {
+                                    if expect(parser, CLOSE_BRACE) != nil {
+                                        return object, true;
+                                    }
+                                    else {
+                                        break loop;
+                                    }
+                                }
+                            }
+                            else {
+                                error(parser, "Failed to escape string");
+                                break loop;
+                            }
+                        }
+                        else {
+                            error(parser, "Expected an object value.");
+                            break loop;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    destroy(object);
+    return nil, false;
+}
+
+parse_array :: proc(using parser: ^Parser) -> (Value, bool) {
+    array: [dynamic]Value;
+
+    if expect(parser, OPEN_BRACKET) != nil {
+        if allow(parser, CLOSE_BRACKET) != nil {
+            return array[:], true;
+        }
+
+        for {
+            if val, ok := parse(parser); ok {
+                append(&array, val);
+
+                if allow(parser, COMMA) == nil {
+                    if expect(parser, CLOSE_BRACKET) != nil {
+                        return array[:], true;
+                    }
+                    else {
+                        break;
+                    }
+                }
+            }
+            else {
+                error(parser, "Expected an array element.");
+                break;
+            }
+        }
+    }
+
+    destroy(array[:]);
+    return nil, false;
+}
+
+parse_literal :: proc(using parser: ^Parser) -> (Value, bool) {
+    if lit := expect(parser, STRING, INT, FLOAT, TRUE, FALSE, NULL); lit != nil {
+        switch lit.kind {
+        case STRING: return unescape_string(lit.text);
+        case INT:    return strconv.parse_i64(lit.text), true;
+        case FLOAT:  return strconv.parse_f64(lit.text), true;
+        case TRUE:   return true, true;
+        case FALSE:  return false, true;
+        case NULL:   return nil, true;
+        }
+    }
+
+    return nil, false;
 }
 
 
@@ -576,9 +608,9 @@ parse_file :: inline proc(path: string, spec := Spec.JSON) -> (Value, bool) {
 // PRINTING
 ///////////////////////////
 
-buffer_print :: proc(buf: ^fmt.String_Buffer, value: Value, spec := Spec.JSON, indent := 0) {
-    switch v in value.value {
-    case Object:
+buffer_print :: proc(buf: ^strings.Builder, value: Value, indent := 0) {
+    /*#complete*/ switch v in value {
+    case map[string]Value:
         fmt.sbprint(buf, "{");
 
         if len(v) != 0 {
@@ -589,15 +621,17 @@ buffer_print :: proc(buf: ^fmt.String_Buffer, value: Value, spec := Spec.JSON, i
             for key, value in v {
                 for _ in 0..indent-1 do fmt.sbprint(buf, "    ");
      
-                if spec == Spec.JSON do fmt.sbprint(buf, "\"");
-                fmt.sbprint(buf, escape_string(key)); // @todo: check for whitespace in JSON5
-                if spec == Spec.JSON do fmt.sbprint(buf, "\"");
+                fmt.sbprint(buf, "\"");
+                if str, ok := escape_string(key); ok {
+                    fmt.sbprint(buf, str); // @todo: check for whitespace in JSON5
+                }
+                fmt.sbprint(buf, "\"");
      
                 fmt.sbprint(buf, ": ");
      
-                buffer_print(buf, value, spec, indent);
+                buffer_print(buf, value, indent);
 
-                if i != len(v)-1 || spec == Spec.JSON5 do fmt.sbprint(buf, ",");
+                if i != len(v)-1 do fmt.sbprint(buf, ",");
 
                 fmt.sbprintln(buf);
 
@@ -610,7 +644,7 @@ buffer_print :: proc(buf: ^fmt.String_Buffer, value: Value, spec := Spec.JSON, i
 
         fmt.sbprint(buf, "}");
 
-    case Array:
+    case []Value:
         fmt.sbprint(buf, "[");
 
         if len(v) != 0 {
@@ -620,9 +654,9 @@ buffer_print :: proc(buf: ^fmt.String_Buffer, value: Value, spec := Spec.JSON, i
             for value, i in v {
                 for _ in 0..indent-1 do fmt.sbprint(buf, "    ");
 
-                buffer_print(buf, value, spec, indent);
+                buffer_print(buf, value, indent);
 
-                if i != len(v)-1 || spec == Spec.JSON5 do fmt.sbprint(buf, ",");
+                if i != len(v)-1 do fmt.sbprint(buf, ",");
 
                 fmt.sbprintln(buf);
             }
@@ -633,23 +667,26 @@ buffer_print :: proc(buf: ^fmt.String_Buffer, value: Value, spec := Spec.JSON, i
 
         fmt.sbprint(buf, "]");
 
-    case String: fmt.sbprintf(buf, "\"%s\"", escape_string(v));
-    case Bool:   fmt.sbprint(buf, v);
-    case Float:  fmt.sbprint(buf, v);
-    case Int:    fmt.sbprint(buf, v);
-    case Null:   fmt.sbprint(buf, "null");
-    case:        fmt.sbprint(buf, "!!!INVALID!!!");
+    case string:
+        if str, ok := escape_string(v); ok {
+            fmt.sbprintf(buf, "\"%s\"", str);
+        }
+
+    case bool: fmt.sbprint(buf, v);
+    case f64:  fmt.sbprint(buf, v);
+    case i64:  fmt.sbprint(buf, v);
+    case:      fmt.sbprint(buf, "null");
     }
 }
 
-to_string :: inline proc(value: Value, spec := Spec.JSON) -> string {
-    buf : fmt.String_Buffer;
-    buffer_print(&buf, value, spec);
-    return fmt.to_string(buf);
+value_to_string :: inline proc(value: Value) -> string {
+    buf: strings.Builder;
+    buffer_print(&buf, value);
+    return strings.to_string(buf);
 }
 
-print :: inline proc(value: Value, spec := Spec.JSON) {
-    json := to_string(value, spec);
+print_value :: inline proc(value: Value) {
+    json := value_to_string(value);
     defer delete(json);
 
     fmt.printf("\n%s\n\n", json);
@@ -662,142 +699,135 @@ print :: inline proc(value: Value, spec := Spec.JSON) {
 // MARSHALLING
 ///////////////////////////
 
-marshal :: proc(data: any, spec := Spec.JSON) -> (value : Value, success := true) {
-    success = true;
-
-    type_info := type_info_base(type_info_of(data.id));
+marshal :: proc(data: any) -> (Value, bool) {
+    type_info := runtime.type_info_base(type_info_of(data.id));
 
     switch v in type_info.variant {
-    case Type_Info_Integer:
-        i: Int;
+    case runtime.Type_Info_Integer:
+        value: i64;
 
         switch type_info.size {
-        case 8:  i = cast(Int) (cast(^i64)  data.data)^;
-        case 4:  i = cast(Int) (cast(^i32)  data.data)^;
-        case 2:  i = cast(Int) (cast(^i16)  data.data)^;
-        case 1:  i = cast(Int) (cast(^i8)   data.data)^;
+        case 8: value = (i64)((^i64)(data.data)^);
+        case 4: value = (i64)((^i32)(data.data)^);
+        case 2: value = (i64)((^i16)(data.data)^);
+        case 1: value = (i64)((^i8) (data.data)^);
         }
 
-        value.value = i;
+        return value, true;
 
-    case Type_Info_Float:
-        f: Float;
+    case runtime.Type_Info_Float:
+        value: f64;
 
         switch type_info.size {
-        case 8: f = cast(Float) (cast(^f64) data.data)^;
-        case 4: f = cast(Float) (cast(^f32) data.data)^;
+        case 8: value = (f64)((^f64)(data.data)^);
+        case 4: value = (f64)((^f32)(data.data)^);
         }
 
-        value.value = f;
+        return value, true;
 
-    case Type_Info_String:
-        str := (cast(^string) data.data)^;
-        value.value = cast(String) str;
+    case runtime.Type_Info_String:
+        return data.(string), true;
 
-    case Type_Info_Boolean:
-        b := cast(Bool) (cast(^bool) data.data)^;
-        value.value = b;
+    case runtime.Type_Info_Boolean:
+        return data.(bool), true;
 
-    case Type_Info_Enum:
+    case runtime.Type_Info_Enum:
         for val, i in v.values {
             #complete switch vv in val {
-            case rune:    value.value = strings.new_string(v.names[vv]);
-            case i8:      value.value = strings.new_string(v.names[vv]);
-            case i16:     value.value = strings.new_string(v.names[vv]);
-            case i32:     value.value = strings.new_string(v.names[vv]);
-            case i64:     value.value = strings.new_string(v.names[vv]);
-            case int:     value.value = strings.new_string(v.names[vv]);
-            case u8:      value.value = strings.new_string(v.names[vv]);
-            case u16:     value.value = strings.new_string(v.names[vv]);
-            case u32:     value.value = strings.new_string(v.names[vv]);
-            case u64:     value.value = strings.new_string(v.names[vv]);
-            case uint:    value.value = strings.new_string(v.names[vv]);
-            case uintptr: value.value = strings.new_string(v.names[vv]);
+            case rune:    if vv == (^rune)   (data.data)^ do return strings.clone(v.names[i]), true;
+            case i8:      if vv == (^i8)     (data.data)^ do return strings.clone(v.names[i]), true;
+            case i16:     if vv == (^i16)    (data.data)^ do return strings.clone(v.names[i]), true;
+            case i32:     if vv == (^i32)    (data.data)^ do return strings.clone(v.names[i]), true;
+            case i64:     if vv == (^i64)    (data.data)^ do return strings.clone(v.names[i]), true;
+            case int:     if vv == (^int)    (data.data)^ do return strings.clone(v.names[i]), true;
+            case u8:      if vv == (^u8)     (data.data)^ do return strings.clone(v.names[i]), true;
+            case u16:     if vv == (^u16)    (data.data)^ do return strings.clone(v.names[i]), true;
+            case u32:     if vv == (^u32)    (data.data)^ do return strings.clone(v.names[i]), true;
+            case u64:     if vv == (^u64)    (data.data)^ do return strings.clone(v.names[i]), true;
+            case uint:    if vv == (^uint)   (data.data)^ do return strings.clone(v.names[i]), true;
+            case uintptr: if vv == (^uintptr)(data.data)^ do return strings.clone(v.names[i]), true;
             }
         }
 
-    case Type_Info_Array:
+    case runtime.Type_Info_Array:
         array := make([dynamic]Value, 0, v.count);
 
         for i in 0..v.count-1 {
-            if tmp, ok := marshal(any{rawptr(uintptr(data.data) + uintptr(v.elem_size*i)), v.elem.id}, spec); ok {
+            if tmp, ok := marshal(any{rawptr(uintptr(data.data) + uintptr(v.elem_size*i)), v.elem.id}); ok {
                 append(&array, tmp);
             } else {
-                success = false;
-                return;
+                // @todo(bp): error
+                return nil, false;
             }
         }
+        
+        return array[:], true;
 
-        value.value = cast(Array) array;
-
-    case Type_Info_Slice:
+    case runtime.Type_Info_Slice:
         a := cast(^mem.Raw_Slice) data.data;
 
         array := make([dynamic]Value, 0, a.len);
 
         for i in 0..a.len-1 {
-            if tmp, ok := marshal(any{rawptr(uintptr(a.data) + uintptr(v.elem_size*i)), v.elem.id}, spec); ok {
+            if tmp, ok := marshal(any{rawptr(uintptr(a.data) + uintptr(v.elem_size*i)), v.elem.id}); ok {
                 append(&array, tmp);
             } else {
-                success = false;
-                return;
+                // @todo(bp): error
+                return nil, false;
             }
         }
 
-        value.value = cast(Array) array;
+        return array[:], true;
 
-    case Type_Info_Dynamic_Array:
+    case runtime.Type_Info_Dynamic_Array:
         array := make([dynamic]Value);
 
         a := cast(^mem.Raw_Dynamic_Array) data.data;
 
         for i in 0..a.len-1 {
-            if tmp, ok := marshal(transmute(any) any{rawptr(uintptr(a.data) + uintptr(v.elem_size*i)), v.elem.id}, spec); ok {
+            if tmp, ok := marshal(transmute(any) any{rawptr(uintptr(a.data) + uintptr(v.elem_size*i)), v.elem.id}); ok {
                 append(&array, tmp);
             } else {
-                success = false;
-                return;
+                // @todo(bp): error
+                return nil, false;
             }
         }
 
-        value.value = cast(Array) array;
+        return array[:], true;
 
-    case Type_Info_Struct:
+    case runtime.Type_Info_Struct:
         object: map[string]Value;
 
         for ti, i in v.types {
-            if tmp, ok := marshal(any{rawptr(uintptr(data.data) + uintptr(v.offsets[i])), ti.id}, spec); ok {
+            if tmp, ok := marshal(any{rawptr(uintptr(data.data) + uintptr(v.offsets[i])), ti.id}); ok {
                 object[v.names[i]] = tmp;
             } else {
-                success = false;
-                return;
+                // @todo(bp): error
+                return nil, false;
             }
         }
 
-        value.value = cast(Object) object;
+        return object, true;
 
-    case Type_Info_Map:
+    case runtime.Type_Info_Map:
         // @todo: implement. ask bill about this, maps are fucky
-        success = false;
-
-    case:
-        success = false;
+        return nil, false;
     }
 
-    return;
+    return nil, false;
 }
 
-marshal_string :: inline proc(data: any, spec := Spec.JSON) -> (string, bool) {
-    if value, ok := marshal(data, spec); ok {
-        return to_string(value, spec), true;
+marshal_string :: inline proc(data: any) -> (string, bool) {
+    if value, ok := marshal(data); ok {
+        return value_to_string(value), true;
     }
 
     return "", false;
 }
 
-marshal_file :: inline proc(path: string, data: any, spec := Spec.JSON) -> bool {
-    if str, ok := marshal_string(data, spec); ok {
-        return os.write_entire_file(path, cast([]u8) str);
+marshal_file :: inline proc(path: string, data: any) -> bool {
+    if str, ok := marshal_string(data); ok {
+        return os.write_entire_file(path, ([]u8)(str));
     }
 
     return false;
@@ -810,43 +840,40 @@ marshal_file :: inline proc(path: string, data: any, spec := Spec.JSON) -> bool 
 // UNMARSHALLING
 ///////////////////////////
 
-unmarshal :: proc[unmarshal_value_to_any, unmarshal_value_to_type];
+unmarshal :: proc{unmarshal_value_to_any, unmarshal_value_to_type};
 
-unmarshal_value_to_any :: proc(data: any, value: Value, spec := Spec.JSON) -> bool {
-    type_info := type_info_base(type_info_of(data.id));
-    type_info  = type_info_base(type_info); // @todo: dirty fucking hack, won't hold up
+unmarshal_value_to_any :: proc(data: any, value: Value) -> bool {
+    type_info := runtime.type_info_base(type_info_of(data.id));
 
-    switch v in value.value {
-    case Object:
+    switch v in value {
+    case map[string]Value:
         switch variant in type_info.variant {
-        case Type_Info_Struct:
+        case runtime.Type_Info_Struct:
             for field, i in variant.names {
                 // @todo: stricter type checking and by-order instead of by-name as an option
                 a := any{rawptr(uintptr(data.data) + uintptr(variant.offsets[i])), variant.types[i].id};
-                if !unmarshal(a, v[field], spec) do return false; // @error
+                if !unmarshal(a, v[field]) do return false; // @error
             }
 
             return true; 
         
-        case Type_Info_Map:
+        case runtime.Type_Info_Map:
             // @todo: implement. ask bill about this, maps are a daunting prospect because they're fairly opaque
         }
 
-        return false; // @error
-
-    case Array:
+    case []Value:
         switch variant in type_info.variant {
-        case Type_Info_Array:
+        case runtime.Type_Info_Array:
             if len(v) > variant.count do return false; // @error
 
             for i in 0..variant.count-1 {
                 a := any{rawptr(uintptr(data.data) + uintptr(variant.elem_size * i)), variant.elem.id};
-                if !unmarshal(a, v[i], spec) do return false; // @error
+                if !unmarshal(a, v[i]) do return false; // @error
             }
 
             return true;
 
-        case Type_Info_Slice:
+        case runtime.Type_Info_Slice:
             array := (^mem.Raw_Slice)(data.data);
 
             if len(v) > array.len do return false; // @error
@@ -854,12 +881,12 @@ unmarshal_value_to_any :: proc(data: any, value: Value, spec := Spec.JSON) -> bo
 
             for i in 0..array.len {
                 a := any{rawptr(uintptr(array.data) + uintptr(variant.elem_size * i)), variant.elem.id};
-                if !unmarshal(a, v[i], spec) do return false; // @error
+                if !unmarshal(a, v[i]) do return false; // @error
             }
 
             return true;
 
-        case Type_Info_Dynamic_Array:
+        case runtime.Type_Info_Dynamic_Array:
             array := (^mem.Raw_Dynamic_Array)(data.data);
 
             if array.cap == 0 {
@@ -877,23 +904,21 @@ unmarshal_value_to_any :: proc(data: any, value: Value, spec := Spec.JSON) -> bo
 
             for i in 0..array.len-1 {
                 a := any{rawptr(uintptr(array.data) + uintptr(variant.elem_size * i)), variant.elem.id};
-                if !unmarshal(a, v[i], spec) do return false; // @error
+                if !unmarshal(a, v[i]) do return false; // @error
             }
 
             return true;
-
-        case: return false; // @error
         }
 
-    case String:
+    case string:
         switch variant in type_info.variant {
-        case Type_Info_String:
+        case runtime.Type_Info_String:
             tmp := string(v);
             mem.copy(data.data, &tmp, size_of(string));
 
             return true;
 
-        case Type_Info_Enum:
+        case runtime.Type_Info_Enum:
             for name, i in variant.names {
                 if name == string(v) {
                     #complete switch val in &variant.values[i] {
@@ -916,11 +941,9 @@ unmarshal_value_to_any :: proc(data: any, value: Value, spec := Spec.JSON) -> bo
             }
         }
 
-        return false; // @error
-
-    case Int:
+    case i64:
         switch variant in type_info.variant {
-        case Type_Info_Integer:
+        case runtime.Type_Info_Integer:
             switch type_info.size {
             case 8:
                 tmp := i64(v);
@@ -943,14 +966,12 @@ unmarshal_value_to_any :: proc(data: any, value: Value, spec := Spec.JSON) -> bo
 
             return true;
 
-        case Type_Info_Enum:
-            return unmarshal(any{data.data, variant.base.id}, value, spec);
+        case runtime.Type_Info_Enum:
+            return unmarshal(any{data.data, variant.base.id}, value);
         }
 
-        return false; // @error
-
-    case Float:
-        if _, ok := type_info.variant.(Type_Info_Float); ok {
+    case f64:
+        if _, ok := type_info.variant.(runtime.Type_Info_Float); ok {
             switch type_info.size {
             case 8:
                 tmp := f64(v);
@@ -966,50 +987,43 @@ unmarshal_value_to_any :: proc(data: any, value: Value, spec := Spec.JSON) -> bo
             return true;
         }
 
-        return false; // @error
-
-    case Bool:
-        if _, ok := type_info.variant.(Type_Info_Boolean); ok {
+    case bool:
+        if _, ok := type_info.variant.(runtime.Type_Info_Boolean); ok {
             tmp := bool(v);
             mem.copy(data.data, &tmp, type_info.size);
 
             return true;
         }
 
-        return false; // @error
-
-    case Null:
+    case:
         mem.set(data.data, 0, type_info.size);
         return true;
-    
-    case: return false; // @error
     }
 
-    panic("Unreachable code.");
     return false;
 }
 
-unmarshal_value_to_type :: inline proc($T: typeid, value: Value, spec := Spec.JSON) -> (T, bool) {
+unmarshal_value_to_type :: inline proc($T: typeid, value: Value) -> (T, bool) {
     tmp: T;
-    ok := unmarshal(tmp, value, spec);
+    ok := unmarshal(tmp, value);
     return tmp, ok;
 }
 
 
-unmarshal_string :: proc[unmarshal_string_to_any, unmarshal_string_to_type];
+unmarshal_string :: proc{unmarshal_string_to_any, unmarshal_string_to_type};
 
-unmarshal_string_to_any :: inline proc(data: any, json: string, spec := Spec.JSON) -> bool {
-    if value, ok := parse_text(json, spec); ok {
-        return unmarshal(data, value, spec);
+unmarshal_string_to_any :: inline proc(data: any, json: string) -> bool {
+    if value, ok := parse_text(json); ok {
+        return unmarshal(data, value);
     }
 
     return false;
 }
 
-unmarshal_string_to_type :: inline proc($T: typeid, json: string, spec := Spec.JSON) -> (T, bool) {
-    if value, ok := parse_text(json, spec); ok {
-        res : T;
-        tmp := unmarshal(res, value, spec);
+unmarshal_string_to_type :: inline proc($T: typeid, json: string) -> (T, bool) {
+    if value, ok := parse_text(json); ok {
+        res: T;
+        tmp := unmarshal(res, value);
         return res, tmp;
     }
 
@@ -1017,19 +1031,19 @@ unmarshal_string_to_type :: inline proc($T: typeid, json: string, spec := Spec.J
 }
 
 
-unmarshal_file :: proc[unmarshal_file_to_any, unmarshal_file_to_type];
+unmarshal_file :: proc{unmarshal_file_to_any, unmarshal_file_to_type};
 
-unmarshal_file_to_any :: inline proc(data: any, path: string, spec := Spec.JSON) -> bool {
-    if value, ok := parse_file(path, spec); ok {
-        return unmarshal(data, value, spec);
+unmarshal_file_to_any :: inline proc(data: any, path: string) -> bool {
+    if value, ok := parse_file(path); ok {
+        return unmarshal(data, value);
     }
 
     return false;
 }
 
-unmarshal_file_to_type :: inline proc($T: typeid, pat: string, spec := Spec.JSON) -> (T, bool) {
-    if value, ok := parse_file(path, spec); ok {
-        return unmarshal(T, value, spec);
+unmarshal_file_to_type :: inline proc($T: typeid, path: string) -> (T, bool) {
+    if value, ok := parse_file(path); ok {
+        return unmarshal(T, value);
     }
 
     return T{}, false;
