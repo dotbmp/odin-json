@@ -177,25 +177,25 @@ Pos :: struct {
     chars: int,
 }
 
-destroy :: proc(value: Value) {
+destroy :: proc(value: Value, allocator := context.allocator) {
     switch v in value {
     case map[string]Value:
         for key, val in v {
-            delete(key);
-            destroy(val);
+            delete(key, allocator);
+            destroy(val, allocator);
         }
 
         delete(v);
 
     case []Value:
         for val in v {
-            destroy(val);
+            destroy(val, allocator);
         }
 
-        delete(v);
+        delete(v, allocator);
 
     case string:
-        delete(v);
+        delete(v, allocator);
     }
 }
 
@@ -744,7 +744,7 @@ marshal :: proc(data: any, allocator := context.allocator) -> (Value, bool) {
     case runtime.Type_Info_Array:
         array := make([dynamic]Value, 0, v.count, allocator);
 
-        for i in 0..v.count-1 {
+        for i in 0..<v.count {
             if tmp, ok := marshal(any{rawptr(uintptr(data.data) + uintptr(v.elem_size*i)), v.elem.id}, allocator); ok {
                 append(&array, tmp);
             } else {
@@ -760,7 +760,7 @@ marshal :: proc(data: any, allocator := context.allocator) -> (Value, bool) {
 
         array := make([dynamic]Value, 0, a.len, allocator);
 
-        for i in 0..a.len-1 {
+        for i in 0..<a.len {
             if tmp, ok := marshal(any{rawptr(uintptr(a.data) + uintptr(v.elem_size*i)), v.elem.id}, allocator); ok {
                 append(&array, tmp);
             } else {
@@ -772,11 +772,11 @@ marshal :: proc(data: any, allocator := context.allocator) -> (Value, bool) {
         return array[:], true;
 
     case runtime.Type_Info_Dynamic_Array:
-        array := make([dynamic]Value, allocator);
-
         a := cast(^mem.Raw_Dynamic_Array) data.data;
 
-        for i in 0..a.len-1 {
+        array := make([dynamic]Value, 0, a.len, allocator);
+
+        for i in 0..<a.len {
             if tmp, ok := marshal(transmute(any) any{rawptr(uintptr(a.data) + uintptr(v.elem_size*i)), v.elem.id}, allocator); ok {
                 append(&array, tmp);
             } else {
@@ -792,7 +792,7 @@ marshal :: proc(data: any, allocator := context.allocator) -> (Value, bool) {
 
         for ti, i in v.types {
             if tmp, ok := marshal(any{rawptr(uintptr(data.data) + uintptr(v.offsets[i])), ti.id}, allocator); ok {
-                object[v.names[i]] = tmp;
+                object[strings.clone(v.names[i])] = tmp;
             } else {
                 // @todo(bp): error
                 return nil, false;
@@ -811,7 +811,7 @@ marshal :: proc(data: any, allocator := context.allocator) -> (Value, bool) {
 
 marshal_string :: inline proc(data: any, allocator := context.allocator) -> (string, bool) {
     if value, ok := marshal(data, allocator); ok {
-        defer destroy(value);
+        defer destroy(value, allocator);
 
         return value_to_string(value, allocator), true;
     }
@@ -821,7 +821,7 @@ marshal_string :: inline proc(data: any, allocator := context.allocator) -> (str
 
 marshal_file :: inline proc(path: string, data: any, allocator := context.allocator) -> bool {
     if str, ok := inline marshal_string(data, allocator); ok {
-        defer delete(str);
+        defer delete(str, allocator);
 
         return os.write_entire_file(path, ([]u8)(str));
     }
