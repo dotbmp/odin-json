@@ -810,8 +810,8 @@ marshal :: proc(data: any, allocator := context.allocator) -> (Value, bool) {
 }
 
 marshal_string :: inline proc(data: any, allocator := context.allocator) -> (string, bool) {
-    if value, ok := marshal(data, allocator); ok {
-        defer destroy(value, allocator);
+    if value, ok := marshal(data); ok {
+        defer destroy(value);
 
         return value_to_string(value, allocator), true;
     }
