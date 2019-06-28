@@ -669,14 +669,14 @@ buffer_print :: proc(buf: ^strings.Builder, value: Value, indent := 0) {
     }
 }
 
-value_to_string :: inline proc(value: Value) -> string {
-    buf: strings.Builder;
+value_to_string :: inline proc(value: Value, allocator := context.allocator) -> string {
+    buf := strings.make_builder(allocator);
     buffer_print(&buf, value);
     return strings.to_string(buf);
 }
 
-print_value :: inline proc(value: Value) {
-    json := value_to_string(value);
+print_value :: inline proc(value: Value, allocator := context.temp_allocator) {
+    json := value_to_string(value, allocator);
     defer delete(json);
 
     fmt.printf("\n%s\n\n", json);
@@ -689,7 +689,9 @@ print_value :: inline proc(value: Value) {
 // MARSHALLING
 ///////////////////////////
 
-marshal :: proc(data: any) -> (Value, bool) {
+// @todo(bp): need a treeless, direct-to-string variant
+
+marshal :: proc(data: any, allocator := context.allocator) -> (Value, bool) {
     type_info := runtime.type_info_base(type_info_of(data.id));
 
     switch v in type_info.variant {
@@ -716,7 +718,7 @@ marshal :: proc(data: any) -> (Value, bool) {
         return value, true;
 
     case runtime.Type_Info_String:
-        return data.(string), true;
+        return strings.clone(data.(string)), true;
 
     case runtime.Type_Info_Boolean:
         return data.(bool), true;
@@ -740,10 +742,10 @@ marshal :: proc(data: any) -> (Value, bool) {
         }
 
     case runtime.Type_Info_Array:
-        array := make([dynamic]Value, 0, v.count);
+        array := make([dynamic]Value, 0, v.count, allocator);
 
         for i in 0..v.count-1 {
-            if tmp, ok := marshal(any{rawptr(uintptr(data.data) + uintptr(v.elem_size*i)), v.elem.id}); ok {
+            if tmp, ok := marshal(any{rawptr(uintptr(data.data) + uintptr(v.elem_size*i)), v.elem.id}, allocator); ok {
                 append(&array, tmp);
             } else {
                 // @todo(bp): error
@@ -756,10 +758,10 @@ marshal :: proc(data: any) -> (Value, bool) {
     case runtime.Type_Info_Slice:
         a := cast(^mem.Raw_Slice) data.data;
 
-        array := make([dynamic]Value, 0, a.len);
+        array := make([dynamic]Value, 0, a.len, allocator);
 
         for i in 0..a.len-1 {
-            if tmp, ok := marshal(any{rawptr(uintptr(a.data) + uintptr(v.elem_size*i)), v.elem.id}); ok {
+            if tmp, ok := marshal(any{rawptr(uintptr(a.data) + uintptr(v.elem_size*i)), v.elem.id}, allocator); ok {
                 append(&array, tmp);
             } else {
                 // @todo(bp): error
@@ -770,12 +772,12 @@ marshal :: proc(data: any) -> (Value, bool) {
         return array[:], true;
 
     case runtime.Type_Info_Dynamic_Array:
-        array := make([dynamic]Value);
+        array := make([dynamic]Value, allocator);
 
         a := cast(^mem.Raw_Dynamic_Array) data.data;
 
         for i in 0..a.len-1 {
-            if tmp, ok := marshal(transmute(any) any{rawptr(uintptr(a.data) + uintptr(v.elem_size*i)), v.elem.id}); ok {
+            if tmp, ok := marshal(transmute(any) any{rawptr(uintptr(a.data) + uintptr(v.elem_size*i)), v.elem.id}, allocator); ok {
                 append(&array, tmp);
             } else {
                 // @todo(bp): error
@@ -786,10 +788,10 @@ marshal :: proc(data: any) -> (Value, bool) {
         return array[:], true;
 
     case runtime.Type_Info_Struct:
-        object: map[string]Value;
+        object := make(map[string]Value, 16, allocator);
 
         for ti, i in v.types {
-            if tmp, ok := marshal(any{rawptr(uintptr(data.data) + uintptr(v.offsets[i])), ti.id}); ok {
+            if tmp, ok := marshal(any{rawptr(uintptr(data.data) + uintptr(v.offsets[i])), ti.id}, allocator); ok {
                 object[v.names[i]] = tmp;
             } else {
                 // @todo(bp): error
@@ -807,16 +809,20 @@ marshal :: proc(data: any) -> (Value, bool) {
     return nil, false;
 }
 
-marshal_string :: inline proc(data: any) -> (string, bool) {
-    if value, ok := marshal(data); ok {
-        return value_to_string(value), true;
+marshal_string :: inline proc(data: any, allocator := context.allocator) -> (string, bool) {
+    if value, ok := marshal(data, allocator); ok {
+        defer destroy(value);
+
+        return value_to_string(value, allocator), true;
     }
 
     return "", false;
 }
 
-marshal_file :: inline proc(path: string, data: any) -> bool {
-    if str, ok := marshal_string(data); ok {
+marshal_file :: inline proc(path: string, data: any, allocator := context.allocator) -> bool {
+    if str, ok := inline marshal_string(data, allocator); ok {
+        defer delete(str);
+
         return os.write_entire_file(path, ([]u8)(str));
     }
 
@@ -830,10 +836,14 @@ marshal_file :: inline proc(path: string, data: any) -> bool {
 // UNMARSHALLING
 ///////////////////////////
 
+// @note(bp): don't pass uninitialized values to the unmarshal_*_any variants!
+
 unmarshal :: proc{unmarshal_value_to_any, unmarshal_value_to_type};
 
-unmarshal_value_to_any :: proc(data: any, value: Value) -> bool {
+unmarshal_value_to_any :: proc(data: any, value: Value, allocator := context.allocator) -> bool {
     type_info := runtime.type_info_base(type_info_of(data.id));
+
+    // @todo(bp): now that unmarshal takes an allocator, handle pointers!
 
     switch v in value {
     case map[string]Value:
@@ -842,7 +852,7 @@ unmarshal_value_to_any :: proc(data: any, value: Value) -> bool {
             for field, i in variant.names {
                 // @todo: stricter type checking and by-order instead of by-name as an option
                 a := any{rawptr(uintptr(data.data) + uintptr(variant.offsets[i])), variant.types[i].id};
-                if !unmarshal(a, v[field]) do return false; // @error
+                if !unmarshal(a, v[field], allocator) do return false; // @error
             }
 
             return true; 
@@ -861,7 +871,7 @@ unmarshal_value_to_any :: proc(data: any, value: Value) -> bool {
 
             for i in 0..<variant.count {
                 a := any{rawptr(uintptr(data.data) + uintptr(variant.elem_size * i)), variant.elem.id};
-                if !unmarshal(a, v[i]) do return false; // @error
+                if !unmarshal(a, v[i], allocator) do return false; // @error
             }
 
             return true;
@@ -869,12 +879,17 @@ unmarshal_value_to_any :: proc(data: any, value: Value) -> bool {
         case runtime.Type_Info_Slice:
             array := (^mem.Raw_Slice)(data.data);
 
-            array.data = mem.alloc(len(v)*variant.elem_size);
-            array.len  = len(v);
+            if array.data == nil {
+                array.data = mem.alloc(len(v)*variant.elem_size, variant.elem.align, allocator);
+                array.len  = len(v);
+            } else if len(v) > array.len {
+                fmt.println_err("Too many elements to fit slice");
+                return false; // @error
+            }
 
             for i in 0..<array.len {
                 a := any{rawptr(uintptr(array.data) + uintptr(variant.elem_size * i)), variant.elem.id};
-                if !unmarshal(a, v[i]) do return false; // @error
+                if !unmarshal(a, v[i], allocator) do return false; // @error
             }
 
             return true;
@@ -882,14 +897,22 @@ unmarshal_value_to_any :: proc(data: any, value: Value) -> bool {
         case runtime.Type_Info_Dynamic_Array:
             array := (^mem.Raw_Dynamic_Array)(data.data);
 
-            array.data      = mem.alloc(len(v)*variant.elem_size);
-            array.len       = len(v);
-            array.cap       = len(v);
-            array.allocator = context.allocator;
+            if array.data == nil {
+                array.data      = mem.alloc(len(v)*variant.elem_size, variant.elem.align, allocator);
+                array.len       = len(v);
+                array.cap       = len(v);
+                array.allocator = allocator;
+            } else if len(v) > array.cap {
+                array.data = mem.resize(array.data, array.cap*variant.elem_size, len(v)*variant.elem_size, variant.elem.align, array.allocator);
+                array.len  = len(v);
+                array.cap  = len(v);
+            } else if len(v) > array.len {
+                array.len = len(v);
+            }
 
             for i in 0..<array.len {
                 a := any{rawptr(uintptr(array.data) + uintptr(variant.elem_size * i)), variant.elem.id};
-                if !unmarshal(a, v[i]) do return false; // @error
+                if !unmarshal(a, v[i], allocator) do return false; // @error
             }
 
             return true;
@@ -899,7 +922,12 @@ unmarshal_value_to_any :: proc(data: any, value: Value) -> bool {
         switch variant in type_info.variant {
         case runtime.Type_Info_String:
             str := (^string)(data.data);
-            str^ = strings.clone(v);
+
+            if (str^) != "" {
+                delete(str^);
+            }
+
+            str^ = strings.clone(v, allocator);
 
             return true;
 
@@ -988,31 +1016,31 @@ unmarshal_value_to_any :: proc(data: any, value: Value) -> bool {
     return false;
 }
 
-unmarshal_value_to_type :: inline proc($T: typeid, value: Value) -> (T, bool) {
-    tmp: T = ---;
-    ok := unmarshal(tmp, value);
+unmarshal_value_to_type :: inline proc($T: typeid, value: Value, allocator := context.allocator) -> (T, bool) {
+    tmp: T;
+    ok := unmarshal(tmp, value, allocator);
     return tmp, ok;
 }
 
 
 unmarshal_string :: proc{unmarshal_string_to_any, unmarshal_string_to_type};
 
-unmarshal_string_to_any :: inline proc(data: any, json: string) -> bool {
+unmarshal_string_to_any :: inline proc(data: any, json: string, allocator := context.allocator) -> bool {
     if value, ok := parse_text(json); ok {
         defer destroy(value);
 
-        return unmarshal(data, value);
+        return unmarshal(data, value, allocator);
     }
 
     return false;
 }
 
-unmarshal_string_to_type :: inline proc($T: typeid, json: string) -> (T, bool) {
+unmarshal_string_to_type :: inline proc($T: typeid, json: string, allocator := context.allocator) -> (T, bool) {
     if value, ok := parse_text(json); ok {
         defer destroy(value);
 
-        res: T = ---;
-        tmp := unmarshal(res, value);
+        res: T;
+        tmp := unmarshal(res, value, allocator);
         return res, tmp;
     }
 
@@ -1022,21 +1050,21 @@ unmarshal_string_to_type :: inline proc($T: typeid, json: string) -> (T, bool) {
 
 unmarshal_file :: proc{unmarshal_file_to_any, unmarshal_file_to_type};
 
-unmarshal_file_to_any :: inline proc(data: any, path: string) -> bool {
+unmarshal_file_to_any :: inline proc(data: any, path: string, allocator := context.allocator) -> bool {
     if value, ok := parse_file(path); ok {
         defer destroy(value);
 
-        return unmarshal(data, value);
+        return unmarshal(data, value, allocator);
     }
 
     return false;
 }
 
-unmarshal_file_to_type :: inline proc($T: typeid, path: string) -> (T, bool) {
+unmarshal_file_to_type :: inline proc($T: typeid, path: string, allocator := context.allocator) -> (T, bool) {
     if value, ok := parse_file(path); ok {
         defer destroy(value);
 
-        return unmarshal(T, value);
+        return unmarshal(T, value, allocator);
     }
 
     return ---, false;
