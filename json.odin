@@ -20,7 +20,7 @@ DEBUG :: true;
 // GENERAL
 ////////////////////////////
 
-escape_string :: proc(str: string) -> (string, bool) {
+escape_string :: proc(str: string) -> (string, bool) #no_bounds_check {
     buf: strings.Builder;
 
     for i := 0; i < len(str); {
@@ -53,7 +53,7 @@ escape_string :: proc(str: string) -> (string, bool) {
     return inline strings.to_string(buf), true;
 }
 
-unescape_string :: proc(str: string) -> (string, bool) {
+unescape_string :: proc(str: string) -> (string, bool) #no_bounds_check {
     buf: strings.Builder;
 
     for i := 0; i < len(str); {
@@ -456,14 +456,10 @@ allow :: inline proc(using parser: ^Parser, kinds: ..Kind) -> ^Token #no_bounds_
 }
 
 expect :: inline proc(using parser: ^Parser, kinds: ..Kind, loc := #caller_location) -> ^Token {
-    token := allow(parser, ..kinds);
+    token := inline allow(parser, ..kinds);
 
     if token == nil {
-        if index >= len(tokens) {
-            error(parser, "Cannot look past the end of the token stream");
-        } else {
-            error(parser, "Expected %v; got %v", kinds, token.kind, loc);
-        }
+        error(parser, "Expected %v; got %v", kinds, token.kind, loc);
     }
 
     return token;
@@ -496,119 +492,101 @@ parse_file :: inline proc(path: string) -> (Value, bool) {
 
 
 parse :: proc(using parser: ^Parser) -> (Value, bool) {
-    switch tokens[index].kind {
-    case OPEN_BRACE:                            return parse_object(parser);
-    case OPEN_BRACKET:                          return parse_array(parser);
-    case STRING, INT, FLOAT, TRUE, FALSE, NULL: return parse_literal(parser);
-    }
+    token := expect(parser, OPEN_BRACE, OPEN_BRACKET, STRING, INT, FLOAT, TRUE, FALSE, NULL);
 
-    // @todo(bp): nice shiny error message
-
-    return ---, false;
-}
-
-parse_object :: proc(using parser: ^Parser) -> (Value, bool) {
-    object: map[string]Value;
-
-    if expect(parser, OPEN_BRACE) == nil {
-        destroy(object);
+    if token == nil {
         return ---, false;
     }
 
-    if allow(parser, CLOSE_BRACKET) != nil {
-        return object, true;
-    }
+    switch token.kind {
+    case OPEN_BRACE:
+        object: map[string]Value;
 
-    for {
-        key := expect(parser, STRING);
-        if key == nil {
-            destroy(object);
-            return ---, false;
+        if allow(parser, CLOSE_BRACE) != nil {
+            return object, true;
         }
 
-        if expect(parser, COLON) == nil {
-            destroy(object);
-            return ---, false;
-        }
+        for {
+            key := expect(parser, STRING);
+            if key == nil {
+                destroy(object);
+                return ---, false;
+            }
 
-        if value, ok := parse(parser); ok {
-            if str, ok := unescape_string(key.text); ok {
-                object[str] = value;
+            if expect(parser, COLON) == nil {
+                destroy(object);
+                return ---, false;
+            }
 
-                if token := expect(parser, COMMA, CLOSE_BRACE); token != nil {
-                    switch token.kind {
-                    case COMMA:       continue;
-                    case CLOSE_BRACE: break;
+            if value, ok := parse(parser); ok {
+                if str, ok := unescape_string(key.text); ok {
+                    object[str] = value;
+
+                    if token := expect(parser, COMMA, CLOSE_BRACE); token != nil {
+                        switch token.kind {
+                        case COMMA:       continue;
+                        case CLOSE_BRACE: break;
+                        }
+                        break;
+                    } else {
+                        destroy(object);
+                        return ---, false;
                     }
-                    break;
-                } else {
+                }
+                else {
+                    error(parser, "Failed to escape string");
                     destroy(object);
                     return ---, false;
                 }
             }
             else {
-                error(parser, "Failed to escape string");
+                error(parser, "Expected an object value.");
                 destroy(object);
-                break;
-            }
-        }
-        else {
-            error(parser, "Expected an object value.");
-            destroy(object);
-            return ---, false;
-        }
-    }
-
-    return object, true;
-}
-
-parse_array :: proc(using parser: ^Parser) -> (Value, bool) {
-    array: [dynamic]Value;
-
-    if expect(parser, OPEN_BRACKET) == nil {
-        destroy(array[:]);
-        return ---, false;
-    }
-
-    if allow(parser, CLOSE_BRACKET) != nil {
-        return array[:], true;
-    }
-
-    for {
-        if value, ok := parse(parser); ok {
-            append(&array, value);
-
-            if token := expect(parser, COMMA, CLOSE_BRACKET); token != nil {
-                switch token.kind {
-                case COMMA:         continue;
-                case CLOSE_BRACKET: break;
-                }
-                break;
-            } else {
-                destroy(array[:]);
                 return ---, false;
             }
         }
-        else {
-            error(parser, "Expected an array element.");
-            return ---, false;
+
+        return object, true;
+
+    case OPEN_BRACKET:
+        array: [dynamic]Value;
+
+        if allow(parser, CLOSE_BRACKET) != nil {
+            return array[:], true;
         }
+
+        for {
+            if value, ok := parse(parser); ok {
+                append(&array, value);
+
+                if token := expect(parser, COMMA, CLOSE_BRACKET); token != nil {
+                    switch token.kind {
+                    case COMMA:         continue;
+                    case CLOSE_BRACKET: break;
+                    }
+                    break;
+                } else {
+                    destroy(array[:]);
+                    return ---, false;
+                }
+            }
+            else {
+                error(parser, "Expected an array element.");
+                return ---, false;
+            }
+        }
+
+        return array[:], true;
+
+    case STRING: return unescape_string(token.text);
+    case INT:    return strconv.parse_i64(token.text), true;
+    case FLOAT:  return strconv.parse_f64(token.text), true;
+    case TRUE:   return true, true;
+    case FALSE:  return false, true;
+    case NULL:   return nil, true;
     }
 
-    return array[:], true;
-}
-
-parse_literal :: proc(using parser: ^Parser) -> (Value, bool) {
-    if token := expect(parser, STRING, INT, FLOAT, TRUE, FALSE, NULL); token != nil {
-        switch token.kind {
-        case STRING: return unescape_string(token.text);
-        case INT:    return strconv.parse_i64(token.text), true;
-        case FLOAT:  return strconv.parse_f64(token.text), true;
-        case TRUE:   return true, true;
-        case FALSE:  return false, true;
-        case NULL:   return nil, true;
-        }
-    }
+    // @todo(bp): nice shiny error message
 
     return ---, false;
 }
@@ -876,9 +854,12 @@ unmarshal_value_to_any :: proc(data: any, value: Value) -> bool {
     case []Value:
         switch variant in type_info.variant {
         case runtime.Type_Info_Array:
-            if len(v) > variant.count do return false; // @error
+            if len(v) > variant.count {
+                fmt.println_err("Too many elements to fit array");
+                return false; // @error
+            }
 
-            for i in 0..variant.count-1 {
+            for i in 0..<variant.count {
                 a := any{rawptr(uintptr(data.data) + uintptr(variant.elem_size * i)), variant.elem.id};
                 if !unmarshal(a, v[i]) do return false; // @error
             }
@@ -888,10 +869,10 @@ unmarshal_value_to_any :: proc(data: any, value: Value) -> bool {
         case runtime.Type_Info_Slice:
             array := (^mem.Raw_Slice)(data.data);
 
-            if len(v) > array.len do return false; // @error
-            array.len = len(v);
+            array.data = mem.alloc(len(v)*variant.elem_size);
+            array.len  = len(v);
 
-            for i in 0..array.len {
+            for i in 0..<array.len {
                 a := any{rawptr(uintptr(array.data) + uintptr(variant.elem_size * i)), variant.elem.id};
                 if !unmarshal(a, v[i]) do return false; // @error
             }
@@ -901,20 +882,12 @@ unmarshal_value_to_any :: proc(data: any, value: Value) -> bool {
         case runtime.Type_Info_Dynamic_Array:
             array := (^mem.Raw_Dynamic_Array)(data.data);
 
-            if array.cap == 0 {
-                array.data      = mem.alloc(len(v)*variant.elem_size);
-                array.cap       = len(v);
-                array.allocator = context.allocator;
-            }
+            array.data      = mem.alloc(len(v)*variant.elem_size);
+            array.len       = len(v);
+            array.cap       = len(v);
+            array.allocator = context.allocator;
 
-            if len(v) > array.cap {
-                context = mem.context_from_allocator(array.allocator);
-                mem.resize(array.data, array.cap, len(v)*variant.elem_size);
-            }
-
-            array.len = len(v);
-
-            for i in 0..array.len-1 {
+            for i in 0..<array.len {
                 a := any{rawptr(uintptr(array.data) + uintptr(variant.elem_size * i)), variant.elem.id};
                 if !unmarshal(a, v[i]) do return false; // @error
             }
@@ -925,8 +898,8 @@ unmarshal_value_to_any :: proc(data: any, value: Value) -> bool {
     case string:
         switch variant in type_info.variant {
         case runtime.Type_Info_String:
-            tmp := string(v);
-            mem.copy(data.data, &tmp, size_of(string));
+            str := (^string)(data.data);
+            str^ = strings.clone(v);
 
             return true;
 
@@ -1007,7 +980,7 @@ unmarshal_value_to_any :: proc(data: any, value: Value) -> bool {
             return true;
         }
 
-    case:
+    case: // @todo(bp): um, excuse me?
         mem.set(data.data, 0, type_info.size);
         return true;
     }
@@ -1016,7 +989,7 @@ unmarshal_value_to_any :: proc(data: any, value: Value) -> bool {
 }
 
 unmarshal_value_to_type :: inline proc($T: typeid, value: Value) -> (T, bool) {
-    tmp: T;
+    tmp: T = ---;
     ok := unmarshal(tmp, value);
     return tmp, ok;
 }
@@ -1026,6 +999,8 @@ unmarshal_string :: proc{unmarshal_string_to_any, unmarshal_string_to_type};
 
 unmarshal_string_to_any :: inline proc(data: any, json: string) -> bool {
     if value, ok := parse_text(json); ok {
+        defer destroy(value);
+
         return unmarshal(data, value);
     }
 
@@ -1034,12 +1009,14 @@ unmarshal_string_to_any :: inline proc(data: any, json: string) -> bool {
 
 unmarshal_string_to_type :: inline proc($T: typeid, json: string) -> (T, bool) {
     if value, ok := parse_text(json); ok {
-        res: T;
+        defer destroy(value);
+
+        res: T = ---;
         tmp := unmarshal(res, value);
         return res, tmp;
     }
 
-    return T{}, false;
+    return ---, false;
 }
 
 
@@ -1047,6 +1024,8 @@ unmarshal_file :: proc{unmarshal_file_to_any, unmarshal_file_to_type};
 
 unmarshal_file_to_any :: inline proc(data: any, path: string) -> bool {
     if value, ok := parse_file(path); ok {
+        defer destroy(value);
+
         return unmarshal(data, value);
     }
 
@@ -1055,8 +1034,10 @@ unmarshal_file_to_any :: inline proc(data: any, path: string) -> bool {
 
 unmarshal_file_to_type :: inline proc($T: typeid, path: string) -> (T, bool) {
     if value, ok := parse_file(path); ok {
+        defer destroy(value);
+
         return unmarshal(T, value);
     }
 
-    return T{}, false;
+    return ---, false;
 }
