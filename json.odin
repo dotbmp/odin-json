@@ -184,16 +184,12 @@ destroy :: proc(value: Value, allocator := context.allocator) {
             delete(key, allocator);
             destroy(val, allocator);
         }
-
         delete(v);
-
     case []Value:
         for val in v {
             destroy(val, allocator);
         }
-
         delete(v, allocator);
-
     case string:
         delete(v, allocator);
     }
@@ -246,7 +242,7 @@ lex :: proc(text: string, filename := "") -> []Token #no_bounds_check {
         source = text,
     };
 
-    tokens := make([dynamic]Token, 0, 1024*1024*32); // @todo(bp): dial in
+    tokens := make([dynamic]Token, 0, len(text) / 5); // @todo(bp): dial in
 
     next_char(&lexer);
 
@@ -601,6 +597,7 @@ parse :: proc(using parser: ^Parser) -> (Value, bool) {
 buffer_print :: proc(buf: ^strings.Builder, value: Value, indent := 0) {
     /*#complete*/ switch v in value {
     case map[string]Value:
+        indent := indent;
         fmt.sbprint(buf, "{");
 
         if len(v) != 0 {
@@ -635,6 +632,7 @@ buffer_print :: proc(buf: ^strings.Builder, value: Value, indent := 0) {
         fmt.sbprint(buf, "}");
 
     case []Value:
+        indent := indent;
         fmt.sbprint(buf, "[");
 
         if len(v) != 0 {
